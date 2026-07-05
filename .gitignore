@@ -1,0 +1,27 @@
+# --- Secrets: structurally un-committable. Force-allow only *.example templates. ---
+.env
+.env.*
+!.env.example
+*.tfvars
+!*.tfvars.example
+*.tfstate
+*.tfstate.*
+*.pem
+*.key
+*.p12
+id_rsa
+id_ed25519
+credentials.json
+service-account*.json
+
+# --- OS / editor cruft ---
+.DS_Store
+Thumbs.db
+
+# --- Python venv created by ./bootstrap.sh ---
+.venv/
+
+# --- Dependency / build output (add your stack's — see github.com/github/gitignore) ---
+node_modules/
+dist/
+build/
