@@ -25,12 +25,25 @@ scripts/checks/
 
 ## Install
 
-```bash
-# 1. from your new repo root
-cp -R /path/to/git-controls-starter/. .
-git init
+This repo is a **GitHub template**, so there are two ways in.
 
-# 2. one command sets up the hooks — no global install required
+**Starting a new project?** Use the template — it gives you a fresh repo with these
+files already committed. On GitHub, click **Use this template → Create a new repository**,
+or from the CLI:
+
+```bash
+gh repo create my-project --template pedro-angel/git-controls-starter --private --clone
+cd my-project
+./bootstrap.sh    # one command sets up the hooks — no global install required
+```
+
+**Adding to a repo you already have?** The template button only makes *new* repos, so
+copy the files in instead:
+
+```bash
+cp -R /path/to/git-controls-starter/. .   # into your existing repo root
+# (add `git init` first if it isn't a git repo yet)
+# heads-up: this also copies README.md and LICENSE — keep your own, don't clobber them
 ./bootstrap.sh
 ```
 
@@ -40,8 +53,9 @@ git init
 2. an existing **pre-commit** on your PATH (`pipx install pre-commit` / `brew install pre-commit`), else
 3. a project-local **`.venv`** with a pinned pre-commit — needs only `python3` (the venv is gitignored).
 
-It installs both hook stages (pre-commit + commit-msg) and runs everything once. To re-run all
-checks later, exactly as CI does:
+It installs both hook stages (pre-commit + commit-msg) and runs the file-hygiene checks once;
+the commit-msg hooks (conventional prefix + provenance trailer) fire on your next commit. To
+re-run all file checks later, exactly as CI does:
 
 ```bash
 pre-commit run --all-files      # or, with prek:  prek run --all-files
@@ -78,6 +92,7 @@ pre-commit run --all-files      # or, with prek:  prek run --all-files
 
 ## One-time GitHub setup when you publish
 
-Add a `LICENSE` **before** going public (no license = all-rights-reserved), a `SECURITY.md`
-+ private vulnerability reporting, a `CONTRIBUTING.md` documenting the commit gate, and tag
-releases with semver so consumers can pin a version.
+This starter ships an MIT `LICENSE` — **update the copyright holder to your own**, or swap in
+a different license (no license = all-rights-reserved). Also add a `SECURITY.md` + private
+vulnerability reporting, a `CONTRIBUTING.md` documenting the commit gate, and tag releases with
+semver so consumers can pin a version.
