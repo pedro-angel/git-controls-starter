@@ -70,7 +70,11 @@ pre-commit run --all-files      # or, with prek:  prek run --all-files
   that slipped in *before* it was ignored.
 - **Scannable, accountable history.** A conventional-commit prefix (`feat/fix/…`) plus a
   required provenance trailer make each commit a decision record. `git commit -s` satisfies
-  the trailer *and* the [DCO](https://developercertificate.org/) in one step.
+  the trailer *and* the [DCO](https://developercertificate.org/) in one step. When a commit's
+  correctness rests on a run — a live integration suite, a deploy, a benchmark — add an
+  `Evidence:` trailer pointing at the captured artifact (a results file, a log, a CI-run URL),
+  so the proof travels with the commit instead of living in a reviewer's memory. That turns
+  "trust me, it's tested" into a link the next reader can open.
 - **Hardened CI.** Least-privilege `permissions: contents: read`, Actions pinned to full
   commit SHAs (a moved tag can't change what runs), `timeout-minutes`, `concurrency` cancel,
   and Dependabot to keep the pins fresh — with bot commits skipped in the commit-msg gate so
