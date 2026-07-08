@@ -13,14 +13,17 @@ pack-specific validators stripped out.
 ```text
 .pre-commit-config.yaml      hygiene + conventional-commit + project invariants (one config, re-run in CI)
 .github/workflows/checks.yml hardened CI that re-runs the SAME config (least-priv, SHA-pinned, timeout, concurrency)
-.github/dependabot.yml       weekly bumps for the SHA-pinned Actions
+.github/workflows/pre-commit-autoupdate.yml  weekly PR bumping the pinned hook revs (Dependabot can't watch pre-commit)
+.github/dependabot.yml       weekly grouped bumps for the SHA-pinned Actions
 .gitignore                   secret globs (structurally un-committable) + OS cruft
 .gitattributes               force LF so line endings don't corrupt across OSes
 .editorconfig                editors satisfy the hygiene hooks before you commit
 bootstrap.sh                 one-command setup: prek, or pre-commit, or a local .venv
 scripts/checks/
   check-no-tracked-secrets.sh  fail if a secret-looking file is tracked (also an example invariant)
+  check-one-pin-per-action.sh  every Action SHA-pinned, one pin per action repo-wide
   check-commit-trailer.sh      require a provenance trailer, so each commit is a decision record
+  check-evidence-trailer.sh    opt-in: live-surface commits must carry an Evidence: trailer
 ```
 
 ## Install
@@ -77,8 +80,13 @@ pre-commit run --all-files      # or, with prek:  prek run --all-files
   "trust me, it's tested" into a link the next reader can open.
 - **Hardened CI.** Least-privilege `permissions: contents: read`, Actions pinned to full
   commit SHAs (a moved tag can't change what runs), `timeout-minutes`, `concurrency` cancel,
-  and Dependabot to keep the pins fresh — with bot commits skipped in the commit-msg gate so
-  Dependabot PRs aren't blocked by the trailer rule.
+  and Dependabot to keep the pins fresh — **grouped**, so the weekly sweep lands as one
+  reviewable PR instead of a pile that goes stale and conflicting. A weekly
+  [`pre-commit-autoupdate.yml`](.github/workflows/pre-commit-autoupdate.yml) does the same
+  for the pinned hook revs — the one dependency surface Dependabot cannot watch. And
+  `check-one-pin-per-action.sh` fails the build if an action is un-pinned or pinned to two
+  different SHAs across workflows, so piecemeal bumps can't drift. Bot commits are skipped
+  in the commit-msg gate so these automated PRs aren't blocked by the trailer rule.
 - **Cross-OS safe.** `.gitattributes` + `.editorconfig` keep line endings LF everywhere.
 
 ## Make it yours
@@ -89,6 +97,18 @@ pre-commit run --all-files      # or, with prek:  prek run --all-files
   schema", "no `console.log` in `src/`"). Register it under `repo: local` in the config.
   Keep them **fail-closed**: exit non-zero when the target is missing, so a green check
   never means "ran against nothing."
+- **Make claims carry proof.** Enable the opt-in `check-evidence-trailer.sh`: pick the
+  paths whose correctness rests on a live run (integration clients, deploy config), and
+  commits touching them must carry an `Evidence:` trailer. The failure it prevents is
+  real: a commit claiming "complete API coverage" once shipped nine integration tests
+  that had never run green against a live server — nothing required proof to travel
+  with the claim.
+- **Preflight your entry points.** A setup script that assumes its prerequisites fails
+  late and cryptically (a venv built on the wrong interpreter dies minutes later, deep
+  in dependency resolution). Make `make setup` / `bootstrap.sh`-style entry points
+  validate prerequisites **against the authoritative source** (e.g. read the version
+  floor from `pyproject.toml` / `package.json`, don't restate it) and fail in the first
+  second with the remedy: `needs Python >=3.14, found 3.13 — run: make setup PYTHON=python3.14`.
 - **Team workflow?** Uncomment `no-commit-to-branch` in the config, and on GitHub enable
   branch protection on `main` with `checks` as a **required status check**.
 - **Optional additions** (keep heavy scanners in CI, not on a fresh clone):
