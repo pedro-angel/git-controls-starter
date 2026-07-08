@@ -10,3 +10,10 @@ updates:
       prefix: "ci"
     labels:
       - "dependencies"
+    # One grouped PR instead of one PR per action. Ungrouped weekly bumps pile up,
+    # go stale against a moving main, and turn CONFLICTING — grouped, the whole
+    # sweep lands as a single reviewable PR.
+    groups:
+      github-actions:
+        patterns:
+          - "*"
