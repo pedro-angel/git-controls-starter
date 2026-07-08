@@ -49,6 +49,11 @@ repos:
         language: script
         entry: scripts/checks/check-no-tracked-secrets.sh
         pass_filenames: false
+      - id: check-one-pin-per-action
+        name: "every Action is SHA-pinned, one pin per action repo-wide"
+        language: script
+        entry: scripts/checks/check-one-pin-per-action.sh
+        pass_filenames: false
       - id: check-commit-trailer
         name: "commit body carries a provenance trailer"
         language: script
