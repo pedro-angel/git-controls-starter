@@ -59,3 +59,11 @@ repos:
         language: script
         entry: scripts/checks/check-commit-trailer.sh
         stages: [commit-msg]
+      # OPT-IN: commits touching live-surface paths must carry an Evidence: trailer
+      # (the machine check behind the README's Evidence convention). Configure
+      # EVIDENCE_PATH_REGEX in the script first — it fails closed if you don't.
+      # - id: check-evidence-trailer
+      #   name: "live-surface commits carry an Evidence: trailer"
+      #   language: script
+      #   entry: scripts/checks/check-evidence-trailer.sh
+      #   stages: [commit-msg]
