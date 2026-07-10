@@ -1,6 +1,6 @@
 # Hook manifest: lets any repo consume these controls REMOTELY, pre-commit's native way —
 #   - repo: https://github.com/pedro-angel/git-controls-starter
-#     rev: v1.0.0        # the weekly autoupdate workflow bumps this via PR
+#     rev: vX.Y.Z        # pin the newest tag; the weekly autoupdate workflow bumps it via PR
 #     hooks: [{id: check-no-tracked-secrets}, ...]
 # instead of vendoring the scripts. Pinned rev = reproducible gate with a provenance
 # trail; `pre-commit autoupdate` = freshness as a reviewable diff, not silent drift.

@@ -41,10 +41,13 @@ support files (these live in your repo — they can't be "consumed"):
 Prerequisite: `pre-commit` on your PATH (`pipx install pre-commit` or
 `brew install pre-commit`) — or grab `bootstrap.sh` from modes 2–3, which falls back
 gracefully. Fetch from a **tag**, never `main`, so a re-run next month gets the same
-files (`gh release list -R pedro-angel/git-controls-starter` shows the newest):
+files (tags here are plain git tags, not GitHub releases — `gh release list` won't show
+them; resolve the newest one directly):
 
 ```bash
-TAG=v1.0.0   # newest tag at time of writing
+TAG=$(git ls-remote --tags --sort=-v:refname \
+  https://github.com/pedro-angel/git-controls-starter 'v*' \
+  | grep -v '\^{}' | head -1 | sed 's|.*refs/tags/||')
 BASE=https://raw.githubusercontent.com/pedro-angel/git-controls-starter/$TAG
 curl -fsSL "$BASE/examples/consumer.pre-commit-config.yaml" -o .pre-commit-config.yaml
 for f in .gitignore .gitattributes .editorconfig \
@@ -94,8 +97,14 @@ checks once. Re-run everything exactly as CI does with `pre-commit run --all-fil
 
 | You are on | Updates arrive by |
 | --- | --- |
-| Remote (mode 1) | Nothing to do — the weekly autoupdate PR bumps `rev`. |
+| Remote (mode 1) | `rev` bumps arrive as the weekly autoupdate PR. New **hook ids** don't — adopt them by hand (below). |
 | Template / copy-in (modes 2–3) | Manually adopt from upstream (below), or migrate to remote (also below). |
+
+**Autoupdate bumps `rev`, never your hook list.** When a tag ships a new hook, add its
+`id` to your config yourself — the tag's commit log announces it. And if the hook is
+`stages: [manual]` (the network-dependent ones are), a rev bump alone will never execute
+it: also add an explicit CI step after your default-stage run, e.g.
+`pre-commit run check-pin-comments-match --hook-stage manual --all-files`.
 
 ### Vendored repo: adopt template updates
 

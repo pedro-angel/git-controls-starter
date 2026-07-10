@@ -26,6 +26,9 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install --upgrade pre-commit
       - run: pre-commit autoupdate
+      # the shipped consumer example pins revs too (including this repo's own tag) —
+      # keep it fresh by the same mechanism, or it rots the moment a tag ships
+      - run: pre-commit autoupdate --config examples/consumer.pre-commit-config.yaml
       - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           commit-message: "ci(pre-commit): autoupdate hook versions"
