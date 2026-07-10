@@ -12,6 +12,8 @@ pack-specific validators stripped out.
 
 ```text
 .pre-commit-config.yaml      hygiene + conventional-commit + project invariants (one config, re-run in CI)
+.pre-commit-hooks.yaml       hook manifest, so other repos can consume the checks REMOTELY at a pinned rev
+examples/consumer.pre-commit-config.yaml  ready-made config for remote consumers (curl it, done)
 .github/workflows/checks.yml hardened CI that re-runs the SAME config (least-priv, SHA-pinned, timeout, concurrency)
 .github/workflows/pre-commit-autoupdate.yml  weekly PR bumping the pinned hook revs (Dependabot can't watch pre-commit)
 .github/dependabot.yml       weekly grouped bumps for the SHA-pinned Actions
@@ -27,43 +29,128 @@ scripts/checks/
   check-evidence-trailer.sh    opt-in: live-surface commits must carry an Evidence: trailer
 ```
 
-## Install
+## Three ways in
 
-This repo is a **GitHub template**, so there are two ways in.
+### 1. Consume remotely — recommended
 
-**Starting a new project?** Use the template — it gives you a fresh repo with these
-files already committed. On GitHub, click **Use this template → Create a new repository**,
-or from the CLI:
+pre-commit's native distribution: your repo references this one at a **pinned tag** and
+vendors nothing, so there is no copy to drift. Grab the ready-made config and the
+support files (these live in your repo — they can't be "consumed"):
+
+Prerequisite: `pre-commit` on your PATH (`pipx install pre-commit` or
+`brew install pre-commit`) — or grab `bootstrap.sh` from modes 2–3, which falls back
+gracefully. Fetch from a **tag**, never `main`, so a re-run next month gets the same
+files (`gh release list -R pedro-angel/git-controls-starter` shows the newest):
+
+```bash
+TAG=v1.0.0   # newest tag at time of writing
+BASE=https://raw.githubusercontent.com/pedro-angel/git-controls-starter/$TAG
+curl -fsSL "$BASE/examples/consumer.pre-commit-config.yaml" -o .pre-commit-config.yaml
+for f in .gitignore .gitattributes .editorconfig \
+         .github/workflows/checks.yml .github/workflows/pre-commit-autoupdate.yml .github/dependabot.yml; do
+  mkdir -p "$(dirname "$f")"
+  if [ -e "$f" ]; then   # never clobber a file you already have — fetch beside it, merge by hand
+    curl -fsSL "$BASE/$f" -o "$f.upstream" && echo "wrote $f.upstream — merge into your $f"
+  else
+    curl -fsSL "$BASE/$f" -o "$f"
+  fi
+done
+pre-commit install --install-hooks && pre-commit run --all-files
+```
+
+Append your own linters at the bottom of the config, add your package ecosystem to
+`dependabot.yml`, done. **Staying current is automatic:** the autoupdate workflow bumps
+the pinned `rev` in a weekly PR — every gate change arrives as a reviewable diff with
+provenance, never as silent drift.
+
+### 2. New repo from the template
+
+Self-contained (everything vendored, works offline, easy to fork-and-diverge). On
+GitHub: **Use this template → Create a new repository**, or:
 
 ```bash
 gh repo create my-project --template pedro-angel/git-controls-starter --private --clone
-cd my-project
-./bootstrap.sh    # one command sets up the hooks — no global install required
+cd my-project && ./bootstrap.sh
 ```
 
-**Adding to a repo you already have?** The template button only makes *new* repos, so
-copy the files in instead:
+### 3. Copy into an existing repo (vendored)
 
 ```bash
-cp -R /path/to/git-controls-starter/. .   # into your existing repo root
-# (add `git init` first if it isn't a git repo yet)
-# heads-up: this also copies README.md and LICENSE — keep your own, don't clobber them
+cp -R /path/to/git-controls-starter/. .        # into your repo root
+git checkout -- README.md LICENSE 2>/dev/null  # restore YOUR versions (the cp clobbered them)
 ./bootstrap.sh
 ```
 
-`bootstrap.sh` uses whatever's available, in this order, so it works on almost any machine:
+If your repo hadn't committed a `README.md`/`LICENSE` yet, delete the starter's copies
+instead of adopting them by accident.
 
-1. **prek** — a single static binary, **zero Python** (`brew install prek`), else
-2. an existing **pre-commit** on your PATH (`pipx install pre-commit` / `brew install pre-commit`), else
-3. a project-local **`.venv`** with a pinned pre-commit — needs only `python3` (the venv is gitignored).
+`bootstrap.sh` (modes 2–3) uses whatever's available, in order: **prek** (a single static
+binary, zero Python — `brew install prek`); an existing **pre-commit** on PATH; else a
+project-local gitignored **`.venv`**. It installs both hook stages and runs the file
+checks once. Re-run everything exactly as CI does with `pre-commit run --all-files`.
 
-It installs both hook stages (pre-commit + commit-msg) and runs the file-hygiene checks once;
-the commit-msg hooks (conventional prefix + provenance trailer) fire on your next commit. To
-re-run all file checks later, exactly as CI does:
+## Staying current & switching modes
+
+| You are on | Updates arrive by |
+| --- | --- |
+| Remote (mode 1) | Nothing to do — the weekly autoupdate PR bumps `rev`. |
+| Template / copy-in (modes 2–3) | Manually adopt from upstream (below), or migrate to remote (also below). |
+
+### Vendored repo: adopt template updates
+
+A repo created from the template shares **no git history** with it, so you can't merge —
+but you can fetch it as a remote and adopt selectively. Two kinds of files:
+**wholesale-safe** (upstream-owned; you rarely edit them) and **hand-merge** (you've
+customized them — never blind-overwrite):
+
+One warning first: the wholesale checkout overwrites same-named files. Invariants you
+wrote yourself are safe **if** they have their own names (`check-my-thing.sh`); if you
+edited an upstream script in place, treat it as hand-merge instead.
 
 ```bash
-pre-commit run --all-files      # or, with prek:  prek run --all-files
+git remote add controls https://github.com/pedro-angel/git-controls-starter 2>/dev/null || true
+git fetch controls --tags
+TAG=$(git tag --sort=-v:refname -l 'v*' | head -1)   # newest upstream tag — use it for BOTH steps
+
+# wholesale-safe: scripts + CI + automation + support files
+git checkout "$TAG" -- scripts/checks bootstrap.sh .pre-commit-hooks.yaml examples \
+  .github/workflows/checks.yml .github/workflows/pre-commit-autoupdate.yml \
+  .github/dependabot.yml .gitattributes .editorconfig
+
+# hand-merge: review what upstream changed in the files you own, and port by hand
+git diff HEAD "$TAG" -- .pre-commit-config.yaml .gitignore
+
+pre-commit run --all-files                # prove the adopted gate is green
+git add -A && git commit                  # one reviewable adoption commit
 ```
+
+### Migrate vendored → remote
+
+The durable fix for update pain. In `.pre-commit-config.yaml`, replace the
+`repo: local` invariant entries with the remote block (see
+[examples/consumer.pre-commit-config.yaml](examples/consumer.pre-commit-config.yaml)),
+then `git rm scripts/checks/<the vendored copies>` — **keep any invariants you wrote
+yourself** under `repo: local`. Everything else (CI, autoupdate, dependabot, hygiene
+files) stays as-is; the autoupdate workflow now also bumps the starter `rev`. Finish
+with `pre-commit run --all-files` — the hooks must fetch from the tag and come up green.
+
+### Migrate remote → vendored
+
+For air-gapped repos, or to fork the checks' behavior: copy the scripts from the tag
+you were pinned to and swap the remote block back to `repo: local` entries:
+
+```bash
+git remote add controls https://github.com/pedro-angel/git-controls-starter 2>/dev/null || true
+git fetch controls --tags && git checkout v1.0.0 -- scripts/checks
+# swap the remote block back to `repo: local` entries, then prove it:
+pre-commit run --all-files
+```
+
+Installing the [agent-methodology](https://github.com/pedro-angel/agent-methodology)
+pack too? The two don't overlap — this repo owns the git controls
+(`.pre-commit-config.yaml`, `scripts/checks/`, CI), the pack owns the prose
+(`AGENTS.md`, `skills/`, agent adapters). Any order works; see the pack's
+[INSTALL.md](https://github.com/pedro-angel/agent-methodology/blob/main/INSTALL.md).
 
 ## What each control buys you
 
