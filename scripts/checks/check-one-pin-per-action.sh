@@ -12,17 +12,13 @@
 # Portable POSIX sh; zero runtime deps beyond grep/sed/awk/sort.
 set -u
 
+# A repo with no workflows has nothing to pin — that's a pass, not "ran against
+# nothing" (this hook is consumed remotely by repos that may not use Actions at all).
 dir=".github/workflows"
-if [ ! -d "$dir" ]; then
-  echo "FAIL: $dir not found — nothing to check (fail-closed)."
-  exit 1
-fi
+[ -d "$dir" ] || { echo "ok: no $dir — nothing to pin"; exit 0; }
 
 files=$(find "$dir" -type f \( -name '*.yml' -o -name '*.yaml' \))
-if [ -z "$files" ]; then
-  echo "FAIL: no workflow files under $dir (fail-closed)."
-  exit 1
-fi
+[ -n "$files" ] || { echo "ok: no workflow files under $dir — nothing to pin"; exit 0; }
 
 # Extract `uses:` refs, skipping comment lines, quotes, trailing "# vX.Y.Z" comments,
 # and non-pinnable forms (./local-action, docker://image).
