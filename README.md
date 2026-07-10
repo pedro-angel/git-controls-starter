@@ -22,6 +22,7 @@ bootstrap.sh                 one-command setup: prek, or pre-commit, or a local 
 scripts/checks/
   check-no-tracked-secrets.sh  fail if a secret-looking file is tracked (also an example invariant)
   check-one-pin-per-action.sh  every Action SHA-pinned, one pin per action repo-wide
+  check-no-private-identifiers.sh  your hostname / private infra names can't enter the repo
   check-commit-trailer.sh      require a provenance trailer, so each commit is a decision record
   check-evidence-trailer.sh    opt-in: live-surface commits must carry an Evidence: trailer
 ```
@@ -87,6 +88,15 @@ pre-commit run --all-files      # or, with prek:  prek run --all-files
   `check-one-pin-per-action.sh` fails the build if an action is un-pinned or pinned to two
   different SHAs across workflows, so piecemeal bumps can't drift. Bot commits are skipped
   in the commit-msg gate so these automated PRs aren't blocked by the trailer rule.
+- **Identity stays out of the repo.** `check-no-private-identifiers.sh` blocks commits
+  that would add your machine's own hostname (derived at runtime — zero config) (generic names like `mac` or `laptop` are skipped — they identify nothing) or any
+  name from a per-user registry at `~/.config/git-controls/private-identifiers` (one
+  identifier per line: other hosts, internal domains). The registry lives *outside* the
+  repo because the list itself is the secret. A hostname is identity, not evidence —
+  record a machine's properties or a role name instead. For the rare file where a name
+  legitimately belongs, add `<identifier> <path-glob>` to a tracked
+  `.private-identifiers-allow` — explicit and reviewable, so the guard fails toward
+  asking rather than silently.
 - **Cross-OS safe.** `.gitattributes` + `.editorconfig` keep line endings LF everywhere.
 
 ## Make it yours
