@@ -30,3 +30,9 @@
   language: script
   stages: [commit-msg]
   # opt-in: fails closed unless EVIDENCE_PATH_REGEX is configured — see the script header
+- id: check-pin-comments-match
+  name: "every pin's # comment still dereferences to its SHA (network; run at CI/manual stage)"
+  entry: scripts/checks/check-pin-comments-match.sh
+  language: script
+  pass_filenames: false
+  stages: [manual]

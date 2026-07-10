@@ -31,6 +31,10 @@ jobs:
           python-version: "3.12"
       # Installs pre-commit into the setup-python environment; later steps reuse it.
       - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+      # Network-dependent invariant: pin comments must still dereference to their SHAs.
+      # Runs here (not at commit time) because it does live tag lookups.
+      - name: pin comments match their SHAs
+        run: ./scripts/checks/check-pin-comments-match.sh
       # `--all-files` does not exercise commit-msg hooks, so lint each commit in the PR range.
       - name: commit-msg checks (PR range)
         if: github.event_name == 'pull_request'
