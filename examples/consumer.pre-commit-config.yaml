@@ -1,0 +1,45 @@
+# Consumer config: adopt the git-controls WITHOUT vendoring any script.
+#   curl -fsSL https://raw.githubusercontent.com/pedro-angel/git-controls-starter/main/examples/consumer.pre-commit-config.yaml -o .pre-commit-config.yaml
+# Then append your project's own linters/formatters at the bottom.
+# The pre-commit-autoupdate workflow bumps every `rev` below via a weekly PR.
+
+default_install_hook_types: [pre-commit, commit-msg] # bare `install` wires both stages
+minimum_pre_commit_version: "3.5.0"
+
+repos:
+  # ---- generic file hygiene -------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: check-yaml
+      - id: detect-private-key
+
+  # ---- conventional-commit TYPE PREFIX (commit-msg stage) -------------------
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: [feat, fix, docs, chore, refactor, test, build, ci, perf, style, revert]
+
+  # ---- the invariants, consumed remotely at a pinned rev --------------------
+  - repo: https://github.com/pedro-angel/git-controls-starter
+    rev: v1.0.0
+    hooks:
+      - id: check-no-tracked-secrets
+      - id: check-one-pin-per-action
+      - id: check-no-private-identifiers
+      - id: check-commit-trailer
+      # opt-in — configure EVIDENCE_PATH_REGEX first (fails closed if you don't):
+      # - id: check-evidence-trailer
+
+  # ---- your project's linters/formatters below ------------------------------
