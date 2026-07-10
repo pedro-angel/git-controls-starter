@@ -33,12 +33,16 @@ repos:
 
   # ---- the invariants, consumed remotely at a pinned rev --------------------
   - repo: https://github.com/pedro-angel/git-controls-starter
-    rev: v1.0.0
+    rev: v1.1.0
     hooks:
       - id: check-no-tracked-secrets
       - id: check-one-pin-per-action
       - id: check-no-private-identifiers
       - id: check-commit-trailer
+      # manual stage upstream (needs network to dereference pins) — a rev bump alone
+      # never runs it; invoke it explicitly in CI after your default-stage run:
+      #   pre-commit run check-pin-comments-match --hook-stage manual --all-files
+      - id: check-pin-comments-match
       # opt-in — configure EVIDENCE_PATH_REGEX first (fails closed if you don't):
       # - id: check-evidence-trailer
 
