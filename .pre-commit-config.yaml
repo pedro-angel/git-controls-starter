@@ -59,6 +59,13 @@ repos:
         language: script
         entry: scripts/checks/check-no-private-identifiers.sh
         pass_filenames: false
+      # network check — CI / `pre-commit run --hook-stage manual`, never commit-time
+      - id: check-pin-comments-match
+        name: "every pin's # comment still dereferences to its SHA"
+        language: script
+        entry: scripts/checks/check-pin-comments-match.sh
+        pass_filenames: false
+        stages: [manual]
       - id: check-commit-trailer
         name: "commit body carries a provenance trailer"
         language: script

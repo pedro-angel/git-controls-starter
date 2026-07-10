@@ -25,6 +25,7 @@ scripts/checks/
   check-no-tracked-secrets.sh  fail if a secret-looking file is tracked (also an example invariant)
   check-one-pin-per-action.sh  every Action SHA-pinned, one pin per action repo-wide
   check-no-private-identifiers.sh  your hostname / private infra names can't enter the repo
+  check-pin-comments-match.sh  CI-stage: a pin's `# vX.Y.Z` comment must still match its SHA
   check-commit-trailer.sh      require a provenance trailer, so each commit is a decision record
   check-evidence-trailer.sh    opt-in: live-surface commits must carry an Evidence: trailer
 ```
@@ -173,7 +174,9 @@ pack too? The two don't overlap — this repo owns the git controls
   [`pre-commit-autoupdate.yml`](.github/workflows/pre-commit-autoupdate.yml) does the same
   for the pinned hook revs — the one dependency surface Dependabot cannot watch. And
   `check-one-pin-per-action.sh` fails the build if an action is un-pinned or pinned to two
-  different SHAs across workflows, so piecemeal bumps can't drift. Bot commits are skipped
+  different SHAs across workflows, so piecemeal bumps can't drift — while the CI-stage
+  `check-pin-comments-match.sh` verifies each pin's `# vX.Y.Z` comment still dereferences
+  to its SHA (an update bot once bumped a pin while the comment kept lying). Bot commits are skipped
   in the commit-msg gate so these automated PRs aren't blocked by the trailer rule.
 - **Identity stays out of the repo.** `check-no-private-identifiers.sh` blocks commits
   that would add your machine's own hostname (derived at runtime — zero config) (generic names like `mac` or `laptop` are skipped — they identify nothing) or any
