@@ -45,5 +45,10 @@ repos:
       - id: check-pin-comments-match
       # opt-in — configure EVIDENCE_PATH_REGEX first (fails closed if you don't):
       # - id: check-evidence-trailer
+      # opt-in for repos with a Mermaid docs pipeline — manual stage, fails closed
+      # without built HTML, so invoke it from your docs target AFTER the build:
+      #   pre-commit run check-diagrams-rendered --hook-stage manual --all-files
+      # defaults fit Sphinx+MyST; DIAGRAMS_* env vars override (see the script header)
+      # - id: check-diagrams-rendered
 
   # ---- your project's linters/formatters below ------------------------------

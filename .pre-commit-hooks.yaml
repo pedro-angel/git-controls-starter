@@ -36,3 +36,10 @@
   language: script
   pass_filenames: false
   stages: [manual]
+- id: check-diagrams-rendered
+  name: "every mermaid fence rendered in the built docs (post-docs-build; run at CI/manual stage)"
+  entry: scripts/checks/check-diagrams-rendered.sh
+  language: script
+  pass_filenames: false
+  stages: [manual]
+  # fail-closed: needs the built HTML present — invoke from your docs target, after the build

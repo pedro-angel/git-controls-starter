@@ -28,6 +28,7 @@ scripts/checks/
   check-pin-comments-match.sh  CI-stage: a pin's `# vX.Y.Z` comment must still match its SHA
   check-commit-trailer.sh      require a provenance trailer, so each commit is a decision record
   check-evidence-trailer.sh    opt-in: live-surface commits must carry an Evidence: trailer
+  check-diagrams-rendered.sh   post-docs-build: every mermaid fence produced a rendered node
 ```
 
 ## Three ways in
