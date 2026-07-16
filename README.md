@@ -14,7 +14,9 @@ pack-specific validators stripped out.
 .pre-commit-config.yaml      hygiene + conventional-commit + project invariants (one config, re-run in CI)
 .pre-commit-hooks.yaml       hook manifest, so other repos can consume the checks REMOTELY at a pinned rev
 examples/consumer.pre-commit-config.yaml  ready-made config for remote consumers (curl it, done)
-.github/workflows/checks.yml hardened CI that re-runs the SAME config (least-priv, SHA-pinned, timeout, concurrency)
+.github/workflows/checks.yml hardened CI: re-runs the SAME config + SAST (shellcheck/Semgrep), deep secret scan, dependency-review
+.github/workflows/security-scan.yml  weekly deep secret + SAST re-scan (osv-scanner/Trivy drop-ins for when you add deps)
+.github/workflows/release.yml  on a v* tag: SBOM + keyless SLSA provenance, published as a GitHub Release
 .github/workflows/pre-commit-autoupdate.yml  weekly PR bumping the pinned hook revs (Dependabot can't watch pre-commit)
 .github/dependabot.yml       weekly grouped bumps for the SHA-pinned Actions
 .gitignore                   secret globs (structurally un-committable) + OS cruft
@@ -42,8 +44,8 @@ support files (these live in your repo — they can't be "consumed"):
 Prerequisite: `pre-commit` on your PATH (`pipx install pre-commit` or
 `brew install pre-commit`) — or grab `bootstrap.sh` from modes 2–3, which falls back
 gracefully. Fetch from a **tag**, never `main`, so a re-run next month gets the same
-files (tags here are plain git tags, not GitHub releases — `gh release list` won't show
-them; resolve the newest one directly):
+files (resolve the newest tag directly with `git ls-remote`, below — it works whether or
+not the tag was also published as a GitHub Release):
 
 ```bash
 TAG=$(git ls-remote --tags --sort=-v:refname \
@@ -51,8 +53,9 @@ TAG=$(git ls-remote --tags --sort=-v:refname \
   | grep -v '\^{}' | head -1 | sed 's|.*refs/tags/||')
 BASE=https://raw.githubusercontent.com/pedro-angel/git-controls-starter/$TAG
 curl -fsSL "$BASE/examples/consumer.pre-commit-config.yaml" -o .pre-commit-config.yaml
-for f in .gitignore .gitattributes .editorconfig \
-         .github/workflows/checks.yml .github/workflows/pre-commit-autoupdate.yml .github/dependabot.yml; do
+for f in .gitignore .gitattributes .editorconfig .github/dependabot.yml \
+         .github/workflows/checks.yml .github/workflows/security-scan.yml \
+         .github/workflows/release.yml .github/workflows/pre-commit-autoupdate.yml; do
   mkdir -p "$(dirname "$f")"
   if [ -e "$f" ]; then   # never clobber a file you already have — fetch beside it, merge by hand
     curl -fsSL "$BASE/$f" -o "$f.upstream" && echo "wrote $f.upstream — merge into your $f"
@@ -125,7 +128,8 @@ TAG=$(git tag --sort=-v:refname -l 'v*' | head -1)   # newest upstream tag — u
 
 # wholesale-safe: scripts + CI + automation + support files
 git checkout "$TAG" -- scripts/checks bootstrap.sh .pre-commit-hooks.yaml examples \
-  .github/workflows/checks.yml .github/workflows/pre-commit-autoupdate.yml \
+  .github/workflows/checks.yml .github/workflows/security-scan.yml \
+  .github/workflows/release.yml .github/workflows/pre-commit-autoupdate.yml \
   .github/dependabot.yml .gitattributes .editorconfig
 
 # hand-merge: review what upstream changed in the files you own, and port by hand
@@ -180,7 +184,8 @@ pack too? The two don't overlap — this repo owns the git controls
 - **Hardened CI.** Least-privilege `permissions: contents: read`, Actions pinned to full
   commit SHAs (a moved tag can't change what runs), `timeout-minutes`, `concurrency` cancel,
   and Dependabot to keep the pins fresh — **grouped**, so the weekly sweep lands as one
-  reviewable PR instead of a pile that goes stale and conflicting. A weekly
+  reviewable PR instead of a pile that goes stale and conflicting, and with a **7-day cooldown**
+  so a freshly published (possibly compromised) version isn't proposed on day one. A weekly
   [`pre-commit-autoupdate.yml`](.github/workflows/pre-commit-autoupdate.yml) does the same
   for the pinned hook revs — the one dependency surface Dependabot cannot watch. And
   `check-one-pin-per-action.sh` fails the build if an action is un-pinned or pinned to two
@@ -188,6 +193,17 @@ pack too? The two don't overlap — this repo owns the git controls
   `check-pin-comments-match.sh` verifies each pin's `# vX.Y.Z` comment still dereferences
   to its SHA (an update bot once bumped a pin while the comment kept lying). Bot commits are skipped
   in the commit-msg gate so these automated PRs aren't blocked by the trailer rule.
+- **Vulnerabilities fail the build, at three gates.** Every PR runs SAST (`shellcheck` on the
+  shell scripts, `Semgrep` on the workflow YAML — Action script-injection, unpinned refs,
+  over-broad permissions), a full-history `gitleaks` secret scan, and `dependency-review` (a PR
+  that *adds* a vulnerable dependency — a GitHub Action counts — is blocked). A weekly
+  [`security-scan.yml`](.github/workflows/security-scan.yml) re-runs the deep secret + SAST scan
+  so a newly-published rule catches an old commit. And a `v*` tag
+  ([`release.yml`](.github/workflows/release.yml)) generates an SBOM and a keyless SLSA
+  build-provenance attestation, published as a GitHub Release — so a consumer can
+  `gh attestation verify` the exact bytes they pin. The scanners that would scan *nothing* on
+  this dependency-free repo (`osv-scanner`, `Trivy`, `CodeQL`) ship as commented drop-ins, not
+  green-against-nothing theater — they activate the moment you add real dependencies or app code.
 - **Identity stays out of the repo.** `check-no-private-identifiers.sh` blocks commits
   that would add your machine's own hostname (derived at runtime — zero config) (generic names like `mac` or `laptop` are skipped — they identify nothing) or any
   name from a per-user registry at `~/.config/git-controls/private-identifiers` (one
@@ -221,12 +237,35 @@ pack too? The two don't overlap — this repo owns the git controls
   second with the remedy: `needs Python >=3.14, found 3.13 — run: make setup PYTHON=python3.14`.
 - **Team workflow?** Uncomment `no-commit-to-branch` in the config, and on GitHub enable
   branch protection on `main` with `checks` as a **required status check**.
-- **Optional additions** (keep heavy scanners in CI, not on a fresh clone):
-  `markdownlint-cli2` for docs, `gitleaks` for deep secret scanning, `shellcheck` for shell.
+- **Security scanning is already wired in** — all at the manual/CI stage, never on a
+  fresh-clone commit (see the three-gate summary above): `shellcheck` + `Semgrep` for SAST,
+  `gitleaks` for deep secret scanning, `dependency-review` on PRs, and SBOM + provenance on
+  release. Still-optional add-ons: `markdownlint-cli2` for docs, and `actionlint`/`zizmor` for
+  dedicated GitHub-Actions workflow linting. `osv-scanner`, `Trivy`, and `CodeQL` ship as
+  commented drop-ins — uncomment them once you have dependencies or compiled/interpreted app
+  code for them to analyze (otherwise they scan nothing and pass, which this repo treats as a bug).
 
 ## One-time GitHub setup when you publish
 
 This starter ships an MIT `LICENSE` — **update the copyright holder to your own**, or swap in
 a different license (no license = all-rights-reserved). Also add a `SECURITY.md` + private
-vulnerability reporting, a `CONTRIBUTING.md` documenting the commit gate, and tag releases with
-semver so consumers can pin a version.
+vulnerability reporting and a `CONTRIBUTING.md` documenting the commit gate.
+
+Some controls live in **repo settings, not files** — no YAML can turn them on. Enable them once,
+in order (each unlocks the next), under *Settings → Code security*:
+
+1. **Dependency graph** — on by default for public repos; enable it on private ones. Everything below needs it.
+2. **Dependabot alerts** — notifies you when a dependency has a known advisory.
+3. **Dependabot security updates** — auto-opens a PR to patch an alerting dependency. This is *distinct* from
+   [`dependabot.yml`](.github/dependabot.yml): security updates are alert-driven (patch a CVE now), whereas the
+   committed `dependabot.yml` drives *scheduled* version bumps. Run either, both, or neither.
+4. **Code scanning** — turns on the *Security → Code scanning* tab that receives SARIF (free on public repos;
+   requires GitHub Advanced Security on private ones). The commented `osv-scanner`/`Trivy` drop-ins in
+   [`security-scan.yml`](.github/workflows/security-scan.yml) upload there once you enable it and grant the job
+   `security-events: write`.
+5. *(optional)* **Secret scanning + push protection** — a server-side complement to the `gitleaks` gate.
+
+Then **tag releases with semver** so consumers can pin a version. A `v*` tag runs
+[`release.yml`](.github/workflows/release.yml), which publishes a **GitHub Release** (so a repo using this
+workflow *does* get `gh release list` entries) carrying the SBOM, and records a keyless SLSA provenance
+attestation. Consumers verify a downloaded asset with `gh attestation verify <file> --repo <owner>/<repo>`.

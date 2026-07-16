@@ -79,3 +79,30 @@ repos:
       #   language: script
       #   entry: scripts/checks/check-evidence-trailer.sh
       #   stages: [commit-msg]
+
+  # ---- heavy security scanners: SAST + secrets, CI-only (manual stage) -------
+  # "Keep heavy scanners in CI, not on a fresh clone" — both run at stages: [manual],
+  # so `git commit` never triggers them and a fresh clone owes nothing. CI runs them
+  # explicitly after the default-stage pass (see .github/workflows/checks.yml), the
+  # same pattern the network-dependent check-pin-comments-match already uses.
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1                  # py wheel — bundles the shellcheck binary, needs no Docker
+    hooks:
+      - id: shellcheck
+        args: [-s, sh]              # force POSIX sh (scripts are #!/bin/sh); catches real bugs no other hook sees
+        stages: [manual]
+  # Semgrep owns the surface shellcheck can't see: the CI/workflow config itself —
+  # Action script-injection via ${{ github.event.* }} in run:, unpinned/mutable refs,
+  # over-broad permissions, risky triggers. (shellcheck owns shell; gitleaks owns secrets.)
+  # Runs TOKENLESS — no Semgrep account or token.
+  - repo: https://github.com/semgrep/semgrep
+    rev: v1.169.0
+    hooks:
+      - id: semgrep
+        # Explicit rulesets + --error = fail-closed: semgrep with no --config scans nothing
+        # and still exits 0 (green-against-nothing). --metrics=off keeps it hermetic; the
+        # p/ registry rulesets are fetched at run time, so this is network-bound → manual/CI.
+        args: [scan, --config, p/ci, --config, p/github-actions,
+               --error, --metrics=off, --disable-version-check,
+               --skip-unknown-extensions, --quiet]
+        stages: [manual]
