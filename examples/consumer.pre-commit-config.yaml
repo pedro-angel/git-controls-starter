@@ -33,7 +33,7 @@ repos:
 
   # ---- the invariants, consumed remotely at a pinned rev --------------------
   - repo: https://github.com/pedro-angel/git-controls-starter
-    rev: v1.1.0
+    rev: v1.3.0
     hooks:
       - id: check-no-tracked-secrets
       - id: check-one-pin-per-action
