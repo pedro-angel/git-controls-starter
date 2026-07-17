@@ -98,6 +98,10 @@ jobs:
       contents: read        # least privilege; a PR comment would need pull-requests: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      # PREREQUISITE: enable the repo's Dependency graph (Settings → Code security). Without it
+      # this job fails closed with "Dependency review is not supported on this repository" — by
+      # design (a scanner that can't run must not pass silently). Free on public repos; private
+      # repos additionally need GitHub Advanced Security. See the README "when you publish" list.
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: low         # fail-closed; raise to 'high' if low/moderate noise bites

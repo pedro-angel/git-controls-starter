@@ -254,7 +254,7 @@ vulnerability reporting and a `CONTRIBUTING.md` documenting the commit gate.
 Some controls live in **repo settings, not files** — no YAML can turn them on. Enable them once,
 in order (each unlocks the next), under *Settings → Code security*:
 
-1. **Dependency graph** — on by default for public repos; enable it on private ones. Everything below needs it.
+1. **Dependency graph** — `dependency-review` fails closed without it. Usually on for public repos but **verify/enable** it here (private repos also need GitHub Advanced Security). Everything below needs it.
 2. **Dependabot alerts** — notifies you when a dependency has a known advisory.
 3. **Dependabot security updates** — auto-opens a PR to patch an alerting dependency. This is *distinct* from
    [`dependabot.yml`](.github/dependabot.yml): security updates are alert-driven (patch a CVE now), whereas the
