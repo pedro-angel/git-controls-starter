@@ -21,6 +21,7 @@ files=$(find "$dir" -type f \( -name '*.yml' -o -name '*.yaml' \))
 
 # lines like: uses: owner/repo[/path]@<40-hex>  # <ref>   -> "action sha ref"
 tmp=$(mktemp) || exit 2
+# shellcheck disable=SC2086  # intentional: $files is a newline-separated list to expand into args
 grep -hE '^[^#]*[[:space:]]uses:[[:space:]]' $files \
   | sed -E 's/.*uses:[[:space:]]*//; s/["'"'"']//g' \
   | grep -E '@[0-9a-f]{40}[[:space:]]+#' \

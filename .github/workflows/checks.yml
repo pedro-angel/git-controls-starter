@@ -31,6 +31,34 @@ jobs:
           python-version: "3.12"
       # Installs pre-commit into the setup-python environment; later steps reuse it.
       - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+      # SAST lives at the manual stage (see .pre-commit-config.yaml) so it never burdens a
+      # fresh-clone commit; the default run above skips it and these steps run it explicitly —
+      # one config, still no local/CI drift. shellcheck reads the POSIX-sh scripts; Semgrep
+      # reads the workflow YAML (Action injection, unpinned refs, over-broad permissions).
+      - name: SAST — shellcheck (sh scripts)
+        run: pre-commit run shellcheck --hook-stage manual --all-files --show-diff-on-failure
+      - name: "SAST — Semgrep (workflow YAML: p/ci + p/github-actions)"
+        run: pre-commit run semgrep --hook-stage manual --all-files --show-diff-on-failure
+      # Deep secret scan. The stock gitleaks pre-commit hook is `--staged` only — on CI's
+      # --all-files it would scan NOTHING and pass, the green-against-nothing trap this repo
+      # forbids. So run the pinned MIT binary in full-history + working-tree mode, fail-closed
+      # via --exit-code 1. checkout above uses fetch-depth: 0, so `gitleaks git .` sees it all.
+      - name: deep secret scan — gitleaks (pinned, checksum-verified)
+        run: |
+          set -eu
+          VER=8.30.1
+          # Pin the BYTES, not just the version tag: this SHA-256 of the linux_x64 asset is the
+          # binary equivalent of the 40-hex Action pins elsewhere — a re-uploaded or tampered asset
+          # under the same tag fails here (fetching the release's own checksums.txt would not).
+          # Bump VER + SHA256 together, and keep them in sync with security-scan.yml.
+          SHA256=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+          asset="gitleaks_${VER}_linux_x64.tar.gz"
+          curl -fsSL -o "$asset" "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/${asset}"
+          echo "${SHA256}  ${asset}" | sha256sum -c -
+          tar -xzf "$asset" gitleaks
+          ./gitleaks version
+          ./gitleaks git . --redact --exit-code 1   # full commit history
+          ./gitleaks dir . --redact --exit-code 1   # all working-tree file contents
       # Network-dependent invariant: pin comments must still dereference to their SHAs.
       # Runs here (not at commit time) because it does live tag lookups.
       - name: pin comments match their SHAs
@@ -55,3 +83,26 @@ jobs:
             git log -1 --format=%B "$sha" > /tmp/commit-msg
             pre-commit run --hook-stage commit-msg --commit-msg-filename /tmp/commit-msg --all-files
           done
+
+  # PR-only supply-chain gate: fails the PR when it ADDS a dependency carrying a known
+  # vulnerability or a denied license. GitHub's dependency graph tracks the Actions used in
+  # .github/workflows, so a PR that bumps an action to a vulnerable version is in scope here —
+  # but advisory coverage for Actions is thin, so this COMPLEMENTS, never replaces, the
+  # SHA-pin + tag-deref checks that are this repo's primary Actions-integrity control.
+  # Scoped to the PR diff: a green run means "no NEW bad deps in this PR", not "repo is clean".
+  dependency-review:
+    if: github.event_name == 'pull_request'   # the action can only diff a PR's base..head
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read        # least privilege; a PR comment would need pull-requests: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      # PREREQUISITE: enable the repo's Dependency graph (Settings → Code security). Without it
+      # this job fails closed with "Dependency review is not supported on this repository" — by
+      # design (a scanner that can't run must not pass silently). Free on public repos; private
+      # repos additionally need GitHub Advanced Security. See the README "when you publish" list.
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: low         # fail-closed; raise to 'high' if low/moderate noise bites
+          comment-summary-in-pr: never  # no PR comment → keeps the token at contents: read

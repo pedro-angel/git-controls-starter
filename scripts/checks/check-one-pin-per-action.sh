@@ -22,6 +22,7 @@ files=$(find "$dir" -type f \( -name '*.yml' -o -name '*.yaml' \))
 
 # Extract `uses:` refs, skipping comment lines, quotes, trailing "# vX.Y.Z" comments,
 # and non-pinnable forms (./local-action, docker://image).
+# shellcheck disable=SC2086  # intentional: $files is a newline-separated list to expand into args
 refs=$(grep -hE '^[^#]*[[:space:]]uses:[[:space:]]' $files \
   | sed -E 's/.*uses:[[:space:]]*//; s/["'"'"']//g; s/[[:space:]]+#.*$//; s/[[:space:]]*$//' \
   | grep -vE '^(\.|docker://)' || true)

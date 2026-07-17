@@ -1,0 +1,78 @@
+# Release provenance. On a plain `v*` tag push, build the source archive, generate an SBOM,
+# sign both with a keyless SLSA build-provenance attestation (Sigstore — no keys to manage),
+# and publish a GitHub Release carrying the SBOM + archive as durable, verifiable assets.
+# This is the supply-chain payoff of "pin to a tag": a consumer can `gh attestation verify`
+# the exact bytes they adopt. (This is what adds GitHub Releases to the repo's plain-tag flow.)
+name: release
+
+on:
+  push:
+    tags: ["v[0-9]*"] # glob (not regex): require a leading digit so `vfoo` can't trigger a release
+
+# Deny all by default; the single job below grants exactly the three scopes it needs and no more,
+# so any job added later without its own block inherits nothing (matches pre-commit-autoupdate.yml).
+permissions: {}
+
+# Never cancel a half-published release out from under itself.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # create the Release and upload the SBOM + archive assets
+      id-token: write # OIDC token for keyless Sigstore signing
+      attestations: write # write the SLSA provenance to GitHub's attestations API
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # Installs the syft binary only (no scan); exposes its path as steps.syft.outputs.cmd.
+      - name: Install Syft (SBOM generator, pinned)
+        id: syft
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+
+      - name: Build source archive + SBOM (fail-closed on empty inventory)
+        env:
+          TAG: ${{ github.ref_name }} # via env, never inlined into the script → no injection surface
+          SYFT: ${{ steps.syft.outputs.cmd }}
+          # A dependency-free sh/YAML repo has no packages to inventory, so record every file with
+          # its digest — that makes the SBOM a real, verifiable manifest of what the tag contains.
+          SYFT_FILE_METADATA_SELECTION: "all"
+          SYFT_FILE_METADATA_DIGESTS: "sha256"
+        run: |
+          set -eu
+          tarball="git-controls-starter-${TAG}.tar.gz"
+          git archive --format=tar.gz --prefix="git-controls-starter-${TAG}/" -o "$tarball" HEAD
+          # SBOM the RELEASED bytes, not the checkout dir: scan a clean extract of the archive so the
+          # manifest matches exactly what ships — no .git plumbing, no self-reference to the tarball.
+          rm -rf sbom-src && mkdir sbom-src
+          tar -xzf "$tarball" -C sbom-src --strip-components=1
+          "$SYFT" dir:sbom-src -o "spdx-json=sbom.spdx.json" -o "cyclonedx-json=sbom.cdx.json"
+          # Fail-closed on CONTENT, not byte-count: a syft doc is valid JSON even when it catalogued
+          # nothing, so `test -s` can't see an empty SBOM. Assert the inventory is actually populated.
+          test -s "$tarball"
+          jq -e '(.files | length) > 0' sbom.spdx.json >/dev/null
+          jq -e '(.components | length) > 0' sbom.cdx.json >/dev/null
+          echo "TARBALL=$tarball" >> "$GITHUB_ENV"
+
+      - name: Attest SLSA build provenance (keyless) for the archive + SBOMs
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: |
+            ${{ env.TARBALL }}
+            sbom.spdx.json
+            sbom.cdx.json
+
+      - name: Publish GitHub Release with SBOM + source archive
+        env:
+          GH_TOKEN: ${{ github.token }} # gh in Actions requires this
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -eu
+          gh release create "$TAG" \
+            --verify-tag \
+            --generate-notes \
+            "$TARBALL" sbom.spdx.json sbom.cdx.json

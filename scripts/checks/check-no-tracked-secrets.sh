@@ -16,6 +16,7 @@ hits=$(git ls-files \
   | grep -vE '\.example$' || true)
 if [ -n "$hits" ]; then
   echo "FAIL: secret-looking file(s) tracked by git — untrack, rotate the secret, and gitignore it:"
+  # shellcheck disable=SC2086  # intentional: split the newline-separated $hits into one arg per file
   printf '  %s\n' $hits
   exit 1
 fi

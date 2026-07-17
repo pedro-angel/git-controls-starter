@@ -1,0 +1,115 @@
+# Weekly scheduled re-scan — catches what a point-in-time PR gate cannot: a newly-published
+# detection rule that now flags an OLD commit, or a secret that was committed and later reverted
+# but still lives in history. On THIS repo the genuinely-active controls are secret + SAST
+# scanning: there are no dependency manifests, so a dependency-CVE scanner (osv-scanner / Trivy
+# SCA) would scan nothing and still pass — the green-against-nothing trap this starter forbids.
+# Those are shipped COMMENTED at the bottom: uncomment them the moment you add a package
+# ecosystem (package.json / requirements.txt / go.mod / …) and they start doing real work.
+name: security-scan
+
+on:
+  schedule:
+    - cron: "0 7 * * 1" # Mondays 07:00 UTC (just after the 06:00 pre-commit-autoupdate PR)
+  workflow_dispatch:
+
+# Least privilege: both active jobs only read the repo. The commented consumer drop-ins that
+# upload SARIF need security-events: write — granted per-job there, never repo-wide.
+permissions:
+  contents: read
+
+# A manual re-run while the weekly one is mid-flight should supersede it, not stack.
+concurrency:
+  group: security-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secret-scan-deep:
+    # Full git history + working tree, fail-closed — the same pinned, checksum-verified gitleaks
+    # binary as checks.yml. The stock gitleaks pre-commit hook is --staged only, so on a whole-repo
+    # scan it would inspect nothing and pass; the binary in `git`/`dir` mode is what does real work.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0 # whole history, so a secret committed then reverted is still caught
+      - name: deep secret scan — gitleaks (pinned, checksum-verified)
+        run: |
+          set -eu
+          VER=8.30.1
+          # Byte-pinned, same as checks.yml — keep VER + SHA256 in sync across both.
+          SHA256=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+          asset="gitleaks_${VER}_linux_x64.tar.gz"
+          curl -fsSL -o "$asset" "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/${asset}"
+          echo "${SHA256}  ${asset}" | sha256sum -c -
+          tar -xzf "$asset" gitleaks
+          ./gitleaks version
+          ./gitleaks git . --redact --exit-code 1 # full commit history
+          ./gitleaks dir . --redact --exit-code 1 # all working-tree file contents
+
+  semgrep:
+    # Re-run Semgrep on a schedule so a NEW registry rule flags existing code even without a PR.
+    # Reuses the exact stages:[manual] hook from .pre-commit-config.yaml — one config, no drift.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+      - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+        with:
+          extra_args: semgrep --hook-stage manual --all-files
+
+  # ---------------------------------------------------------------------------
+  # CONSUMER DROP-IN — dependency-CVE scanning (osv-scanner) and misconfig/secret
+  # scanning (Trivy). Left COMMENTED deliberately: this starter has no dependency
+  # manifests, so on it these scan nothing and still pass — the green-against-nothing
+  # anti-pattern. Uncomment the moment you add a package ecosystem, and note each job
+  # needs `security-events: write` so its SARIF lands in Security > Code scanning
+  # (free on public repos; requires GitHub Advanced Security on private ones).
+  #
+  # osv-scanner — CVEs from lockfiles/manifests across ~13 ecosystems (does NOT scan Actions):
+  #   osv-scan:
+  #     permissions:
+  #       actions: read
+  #       contents: read
+  #       security-events: write
+  #     uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+  #
+  # Trivy — only its `secret` mode does real work on a manifest-less repo; fs/misconfig/license
+  # are green-against-nothing here, and Trivy has NO GitHub-Actions misconfig rules (use
+  # actionlint or zizmor for workflow linting):
+  #   trivy-secret:
+  #     runs-on: ubuntu-latest
+  #     permissions:
+  #       contents: read
+  #       security-events: write
+  #     steps:
+  #       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+  #       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+  #         with:
+  #           scan-type: fs
+  #           scan-ref: .
+  #           scanners: secret
+  #           exit-code: "1"
+  #
+  # CodeQL — SAST for COMPILED/INTERPRETED app code (C/C++, C#, Go, Java/Kotlin, JS/TS,
+  # Python, Ruby, Rust, Swift). It does NOT analyze shell or YAML, so it finds nothing on
+  # this starter — that is why it is commented, not wired (shellcheck + Semgrep cover this
+  # repo's actual surface). Uncomment and set `language:` to YOUR stack once you add app code:
+  #   codeql:
+  #     runs-on: ubuntu-latest
+  #     permissions:
+  #       contents: read
+  #       security-events: write
+  #     strategy:
+  #       matrix:
+  #         language: [python] # replace with your language(s); shell/YAML are unsupported
+  #     steps:
+  #       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+  #       - uses: github/codeql-action/init@02c5e83432fe5497fd85b873b6c9f16a8578e1d9 # v3.37.0
+  #         with:
+  #           languages: ${{ matrix.language }}
+  #       - uses: github/codeql-action/analyze@02c5e83432fe5497fd85b873b6c9f16a8578e1d9 # v3.37.0
+  # ---------------------------------------------------------------------------

@@ -51,4 +51,27 @@ repos:
       # defaults fit Sphinx+MyST; DIAGRAMS_* env vars override (see the script header)
       # - id: check-diagrams-rendered
 
+  # ---- heavy security scanners: SAST + secrets, CI-only (manual stage) -------
+  # Run these in CI after your default-stage pass, never on a fresh-clone commit:
+  #   pre-commit run --hook-stage manual --all-files shellcheck semgrep
+  # (For deep secret scanning, run the gitleaks BINARY in CI — the stock gitleaks
+  #  pre-commit hook is --staged only, so on --all-files it scans nothing and goes
+  #  green. See this starter's checks.yml for the fail-closed `gitleaks dir/git .` step.)
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+        args: [-s, sh]        # drop this arg if your scripts are bash (#!/bin/bash), not POSIX sh
+        stages: [manual]
+  - repo: https://github.com/semgrep/semgrep
+    rev: v1.169.0
+    hooks:
+      - id: semgrep
+        # p/ci + p/github-actions = CI/workflow supply-chain rules. Add language packs for
+        # YOUR code (e.g. p/python, p/javascript); shellcheck covers shell, gitleaks secrets.
+        args: [scan, --config, p/ci, --config, p/github-actions,
+               --error, --metrics=off, --disable-version-check,
+               --skip-unknown-extensions, --quiet]
+        stages: [manual]
+
   # ---- your project's linters/formatters below ------------------------------

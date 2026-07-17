@@ -22,6 +22,7 @@ add_term() {
   # Skip empty, 1-2 chars, and generic machine names: a generic name identifies
   # nothing, and (found live) a Mac named "Mac" would otherwise deny the word "Mac"
   # in every doc. Genuinely identifying short names belong in the registry.
+  # shellcheck disable=SC2221,SC2222  # ? and ?? deliberately skip 1- and 2-char terms; they don't overlap the named ones
   case "$t" in "" | ? | ?? | localhost | mac | imac | macbook | pc | desktop | laptop | server | host | computer | home) return ;; esac
   case " $deny " in *" $t "*) return ;; esac # dedup
   deny="$deny $t"
