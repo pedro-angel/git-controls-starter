@@ -48,11 +48,13 @@
   entry: scripts/checks/vocabulary-conformance.sh
   language: script
   pass_filenames: false
-  files: ^(GNUmakefile|makefile|Makefile)$
   # Normal stage, unlike the two manual hooks above: this one needs no network and no
-  # prior build step, only `make`. The files: filter keeps it off unrelated commits,
-  # while `--all-files` (CI, or a DoD gate) still runs it unconditionally.
-  # Fail-closed by design: adopting it in a repo with no root Makefile fails loudly.
+  # prior build step, only `make` (~0.3s). No files: filter, matching every other
+  # repo-wide check here — gating on ^Makefile$ would look like a cheap optimization but
+  # makes pre-commit report "(no files to check) Skipped" in a repo that has no Makefile
+  # at all, so an opt-in gate would pass silently forever on the repos most in need of
+  # it. That is the green-against-nothing trap this repo forbids elsewhere. Without the
+  # filter the checker runs and fails loudly instead.
   # The manifest travels with the script — the vocabulary is a shared cross-repo
   # standard, not per-repo config. Override with VOCABULARY_MANIFEST or args: only for
   # a repo that needs a deliberate variant.
