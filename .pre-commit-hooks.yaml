@@ -43,3 +43,16 @@
   pass_filenames: false
   stages: [manual]
   # fail-closed: needs the built HTML present — invoke from your docs target, after the build
+- id: vocabulary-conformance
+  name: "make targets conform to the shared cross-repo vocabulary"
+  entry: scripts/checks/vocabulary-conformance.sh
+  language: script
+  pass_filenames: false
+  files: ^(GNUmakefile|makefile|Makefile)$
+  # Normal stage, unlike the two manual hooks above: this one needs no network and no
+  # prior build step, only `make`. The files: filter keeps it off unrelated commits,
+  # while `--all-files` (CI, or a DoD gate) still runs it unconditionally.
+  # Fail-closed by design: adopting it in a repo with no root Makefile fails loudly.
+  # The manifest travels with the script — the vocabulary is a shared cross-repo
+  # standard, not per-repo config. Override with VOCABULARY_MANIFEST or args: only for
+  # a repo that needs a deliberate variant.
