@@ -143,6 +143,7 @@ fires() { # fires <capability> <name>
   case "$1" in
     -) return 0 ;;                       # always fires
     stack)
+      # shellcheck disable=SC2035  # intentional: these globs are arguments to any_glob, which only runs [ -e ] on each — never an option-parsing command
       any_glob docker-compose.yml docker-compose.yaml compose.yml \
         compose.yaml */docker-compose.yml */docker-compose.yaml \
         */compose.yml */compose.yaml && return 0
@@ -157,6 +158,7 @@ fires() { # fires <capability> <name>
     ship)
       grep -q '^\[project\]' pyproject.toml 2>/dev/null && return 0
       [ -f package.json ] && return 0
+      # shellcheck disable=SC2035  # intentional: glob is an argument to any_glob (see above)
       any_glob Dockerfile */Dockerfile && return 0
       return 1 ;;
     analyzers)                           # analyzer config outside the hook config
