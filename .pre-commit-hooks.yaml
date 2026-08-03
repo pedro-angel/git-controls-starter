@@ -43,3 +43,18 @@
   pass_filenames: false
   stages: [manual]
   # fail-closed: needs the built HTML present — invoke from your docs target, after the build
+- id: vocabulary-conformance
+  name: "make targets conform to the shared cross-repo vocabulary"
+  entry: scripts/checks/vocabulary-conformance.sh
+  language: script
+  pass_filenames: false
+  # Normal stage, unlike the two manual hooks above: this one needs no network and no
+  # prior build step, only `make` (~0.3s). No files: filter, matching every other
+  # repo-wide check here — gating on ^Makefile$ would look like a cheap optimization but
+  # makes pre-commit report "(no files to check) Skipped" in a repo that has no Makefile
+  # at all, so an opt-in gate would pass silently forever on the repos most in need of
+  # it. That is the green-against-nothing trap this repo forbids elsewhere. Without the
+  # filter the checker runs and fails loudly instead.
+  # The manifest travels with the script — the vocabulary is a shared cross-repo
+  # standard, not per-repo config. Override with VOCABULARY_MANIFEST or args: only for
+  # a repo that needs a deliberate variant.

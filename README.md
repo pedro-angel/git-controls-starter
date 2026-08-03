@@ -31,6 +31,8 @@ scripts/checks/
   check-commit-trailer.sh      require a provenance trailer, so each commit is a decision record
   check-evidence-trailer.sh    opt-in: live-surface commits must carry an Evidence: trailer
   check-diagrams-rendered.sh   post-docs-build: every mermaid fence produced a rendered node
+  vocabulary-conformance.sh    make targets match the shared cross-repo vocabulary
+  vocabulary.txt               the canonical target-name list, shipped with the checker
 ```
 
 ## Three ways in
@@ -213,6 +215,15 @@ pack too? The two don't overlap — this repo owns the git controls
   legitimately belongs, add `<identifier> <path-glob>` to a tracked
   `.private-identifiers-allow` — explicit and reviewable, so the guard fails toward
   asking rather than silently.
+- **Sibling repos share one dev vocabulary.** `vocabulary-conformance.sh` checks that a
+  repo's `make` targets come from the shared cross-repo name list — `setup`, `test`,
+  `check`, `dod`, the `stack-*` and `test-*` families — rather than whatever each repo's
+  backend happened to call things. It verifies the names exist as real targets (a `.PHONY`
+  ghost whose rule was deleted doesn't count), that no banned or shadowed name is used, that
+  family names appear exactly when their capability marker fires, and that `check` actually
+  expands to run the floor it claims. Opt in per repo; it fails closed with no root
+  `Makefile`. The manifest ships **with the checker**, not copied into each consumer —
+  a shared standard stops being shared the moment every repo owns a fork of the list.
 - **Cross-OS safe.** `.gitattributes` + `.editorconfig` keep line endings LF everywhere.
 
 ## Make it yours
