@@ -147,6 +147,18 @@ fires() { # fires <capability> <name>
       any_glob docker-compose.yml docker-compose.yaml compose.yml \
         compose.yaml */docker-compose.yml */docker-compose.yaml \
         */compose.yml */compose.yaml && return 0
+      # A RENDERED stack: the compose file is generated at runtime (host paths,
+      # ports and image pins baked in), so what the repo commits is a TEMPLATE
+      # of it and no plain compose file exists to find. Matched on the compose
+      # BASENAME only — deliberately not "any templated yaml", because a repo
+      # that templates some unrelated config would then be told to grow stack-*
+      # targets for a stack it does not have, trading a false negative for a
+      # worse false positive.
+      # shellcheck disable=SC2035  # same as above: globs are any_glob arguments, only ever [ -e ]'d
+      any_glob docker-compose.yml.tmpl docker-compose.yaml.tmpl \
+        compose.yml.tmpl compose.yaml.tmpl \
+        */docker-compose.yml.tmpl */docker-compose.yaml.tmpl \
+        */compose.yml.tmpl */compose.yaml.tmpl && return 0
       any_glob ./*stack*.sh scripts/*stack*.sh && return 0
       return 1 ;;
     suite)                               # the tier's suite is registered:
