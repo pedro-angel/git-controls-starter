@@ -43,6 +43,12 @@ BASE=https://raw.githubusercontent.com/pedro-angel/git-controls-starter/$TAG
 curl -fsSL "$BASE/examples/.pre-commit-config.yaml" -o .pre-commit-config.yaml
 fetched=".pre-commit-config.yaml"
 
+# Pin the checks to the SAME tag these files came from. The committed example cannot name
+# its own future tag, so it always trails one release — without this line a fresh install
+# fetches vN files but vN-1 checks.
+sed -i.bak "/git-controls-starter\$/{n;s|rev: .*|rev: $TAG|;}" .pre-commit-config.yaml \
+  && rm -f .pre-commit-config.yaml.bak
+
 for f in .gitignore .gitattributes .editorconfig .github/dependabot.yml \
          .github/workflows/checks.yml .github/workflows/security-scan.yml \
          .github/workflows/release.yml; do
