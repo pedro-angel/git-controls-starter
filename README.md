@@ -192,6 +192,6 @@ pre-commit install --install-hooks   # both stages
 pre-commit run --all-files           # exactly what CI runs
 ```
 
-Related: the [agent-methodology](https://github.com/pedro-angel/agent-methodology) pack.
+Related: the [claude-agent-methodology](https://github.com/pedro-angel/claude-agent-methodology) pack.
 The two do not overlap — this repo owns the git controls, the pack owns the prose
-(`AGENTS.md`, `skills/`, agent adapters). Any order works.
+(`rules/always-on.md`, `skills/`, consumption tooling). Any order works.
