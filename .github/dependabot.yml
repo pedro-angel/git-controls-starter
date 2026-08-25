@@ -22,3 +22,41 @@ updates:
       github-actions:
         patterns:
           - "*"
+
+  # Keep the pinned pre-commit hook `rev`s fresh. Dependabot has supported the
+  # pre-commit ecosystem since 2026-03-10, which makes a hand-rolled
+  # `pre-commit autoupdate` workflow unnecessary — and unlike a workflow, Dependabot
+  # is unaffected by the "Allow GitHub Actions to create and approve pull requests"
+  # org/repo setting that silently blocks bot-authored PRs from Actions.
+  - package-ecosystem: "pre-commit"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"
+    groups:
+      pre-commit:
+        patterns:
+          - "*"
+  # The consumer example is a second pre-commit config that must not rot: it is the
+  # file adopters curl. It lives at the standard filename inside examples/ precisely
+  # so Dependabot discovers it — GitHub does not document discovery of non-standard
+  # pre-commit filenames, so this does not rely on it.
+  - package-ecosystem: "pre-commit"
+    directory: "/examples"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"
+    groups:
+      pre-commit-example:
+        patterns:
+          - "*"

@@ -1,7 +1,9 @@
 # Consumer config: adopt the git-controls WITHOUT vendoring any script.
-#   curl -fsSL https://raw.githubusercontent.com/pedro-angel/git-controls-starter/main/examples/consumer.pre-commit-config.yaml -o .pre-commit-config.yaml
+# Fetch it from a TAG, never main, so a re-run next month gets the same file — see the
+# README's install block, which resolves the newest tag for you.
 # Then append your project's own linters/formatters at the bottom.
-# The pre-commit-autoupdate workflow bumps every `rev` below via a weekly PR.
+# Dependabot bumps every `rev` below via a weekly PR once you add the pre-commit
+# ecosystem to your .github/dependabot.yml (copy the block from this repo's).
 
 default_install_hook_types: [pre-commit, commit-msg] # bare `install` wires both stages
 minimum_pre_commit_version: "3.5.0"
@@ -33,7 +35,7 @@ repos:
 
   # ---- the invariants, consumed remotely at a pinned rev --------------------
   - repo: https://github.com/pedro-angel/git-controls-starter
-    rev: v1.3.0
+    rev: v1.5.0
     hooks:
       - id: check-no-tracked-secrets
       - id: check-one-pin-per-action
@@ -50,6 +52,10 @@ repos:
       #   pre-commit run check-diagrams-rendered --hook-stage manual --all-files
       # defaults fit Sphinx+MyST; DIAGRAMS_* env vars override (see the script header)
       # - id: check-diagrams-rendered
+      # opt-in for repos that drive their dev workflow through a root Makefile: asserts the
+      # make targets come from the shared cross-repo vocabulary. Fails closed (exit 2) when
+      # there is no root Makefile to read, so leave it commented unless you have one.
+      # - id: vocabulary-conformance
 
   # ---- heavy security scanners: SAST + secrets, CI-only (manual stage) -------
   # Run these in CI after your default-stage pass, never on a fresh-clone commit:

@@ -13,7 +13,7 @@ pack-specific validators stripped out.
 ```text
 .pre-commit-config.yaml      hygiene + conventional-commit + project invariants (one config, re-run in CI)
 .pre-commit-hooks.yaml       hook manifest, so other repos can consume the checks REMOTELY at a pinned rev
-examples/consumer.pre-commit-config.yaml  ready-made config for remote consumers (curl it, done)
+examples/.pre-commit-config.yaml  ready-made config for remote consumers (curl it, done)
 .github/workflows/checks.yml hardened CI: re-runs the SAME config + SAST (shellcheck/Semgrep), deep secret scan, dependency-review
 .github/workflows/security-scan.yml  weekly deep secret + SAST re-scan (osv-scanner/Trivy drop-ins for when you add deps)
 .github/workflows/release.yml  on a v* tag: SBOM + keyless SLSA provenance, published as a GitHub Release
@@ -54,7 +54,7 @@ TAG=$(git ls-remote --tags --sort=-v:refname \
   https://github.com/pedro-angel/git-controls-starter 'v*' \
   | grep -v '\^{}' | head -1 | sed 's|.*refs/tags/||')
 BASE=https://raw.githubusercontent.com/pedro-angel/git-controls-starter/$TAG
-curl -fsSL "$BASE/examples/consumer.pre-commit-config.yaml" -o .pre-commit-config.yaml
+curl -fsSL "$BASE/examples/.pre-commit-config.yaml" -o .pre-commit-config.yaml
 for f in .gitignore .gitattributes .editorconfig .github/dependabot.yml \
          .github/workflows/checks.yml .github/workflows/security-scan.yml \
          .github/workflows/release.yml .github/workflows/pre-commit-autoupdate.yml; do
@@ -145,7 +145,7 @@ git add -A && git commit                  # one reviewable adoption commit
 
 The durable fix for update pain. In `.pre-commit-config.yaml`, replace the
 `repo: local` invariant entries with the remote block (see
-[examples/consumer.pre-commit-config.yaml](examples/consumer.pre-commit-config.yaml)),
+[examples/.pre-commit-config.yaml](examples/.pre-commit-config.yaml)),
 then `git rm scripts/checks/<the vendored copies>` — **keep any invariants you wrote
 yourself** under `repo: local`. Everything else (CI, autoupdate, dependabot, hygiene
 files) stays as-is; the autoupdate workflow now also bumps the starter `rev`. Finish
