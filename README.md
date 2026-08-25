@@ -41,6 +41,7 @@ TAG=$(git ls-remote --tags --sort=-v:refname \
 BASE=https://raw.githubusercontent.com/pedro-angel/git-controls-starter/$TAG
 
 curl -fsSL "$BASE/examples/.pre-commit-config.yaml" -o .pre-commit-config.yaml
+fetched=".pre-commit-config.yaml"
 
 for f in .gitignore .gitattributes .editorconfig .github/dependabot.yml \
          .github/workflows/checks.yml .github/workflows/security-scan.yml \
@@ -49,10 +50,14 @@ for f in .gitignore .gitattributes .editorconfig .github/dependabot.yml \
   if [ -e "$f" ]; then   # never clobber a file you already have
     curl -fsSL "$BASE/$f" -o "$f.upstream" && echo "wrote $f.upstream — merge by hand"
   else
-    curl -fsSL "$BASE/$f" -o "$f"
+    curl -fsSL "$BASE/$f" -o "$f" && fetched="$fetched $f"
   fi
 done
 
+# Stage what was fetched BEFORE verifying: `--all-files` means all TRACKED files, so an
+# unstaged tree makes every hook report "(no files to check) Skipped" and the run go green
+# against nothing.
+git add $fetched
 pre-commit install --install-hooks && pre-commit run --all-files
 ```
 

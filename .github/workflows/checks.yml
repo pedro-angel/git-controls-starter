@@ -61,8 +61,12 @@ jobs:
           ./gitleaks dir . --redact --exit-code 1   # all working-tree file contents
       # Network-dependent invariant: pin comments must still dereference to their SHAs.
       # Runs here (not at commit time) because it does live tag lookups.
+      # Invoked through pre-commit, NOT as ./scripts/checks/... — this workflow is copied
+      # verbatim by remote consumers, who vendor no scripts. The hook id resolves whether the
+      # check comes from `repo: local` (here) or from the pinned remote (them); a hard path
+      # resolves only here and fails their CI with "No such file or directory".
       - name: pin comments match their SHAs
-        run: ./scripts/checks/check-pin-comments-match.sh
+        run: pre-commit run check-pin-comments-match --hook-stage manual --all-files
       # `--all-files` does not exercise commit-msg hooks, so lint each commit in the PR range.
       - name: commit-msg checks (PR range)
         if: github.event_name == 'pull_request'
