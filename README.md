@@ -193,8 +193,11 @@ pack too? The two don't overlap — this repo owns the git controls
   `check-one-pin-per-action.sh` fails the build if an action is un-pinned or pinned to two
   different SHAs across workflows, so piecemeal bumps can't drift — while the CI-stage
   `check-pin-comments-match.sh` verifies each pin's `# vX.Y.Z` comment still dereferences
-  to its SHA (an update bot once bumped a pin while the comment kept lying). Bot commits are skipped
-  in the commit-msg gate so these automated PRs aren't blocked by the trailer rule.
+  to its SHA (an update bot once bumped a pin while the comment kept lying). It separates a
+  wrong comment from an unverifiable one — exit 1 means a comment really is stale, exit 2 means
+  a lookup could not reach the remote — so a flaky network can never be reported as a bad pin.
+  Bot commits are skipped in the commit-msg gate so these automated PRs aren't blocked by the
+  trailer rule.
 - **Vulnerabilities fail the build, at three gates.** Every PR runs SAST (`shellcheck` on the
   shell scripts, `Semgrep` on the workflow YAML — Action script-injection, unpinned refs,
   over-broad permissions), a full-history `gitleaks` secret scan, and `dependency-review` (a PR
