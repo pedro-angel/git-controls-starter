@@ -18,7 +18,7 @@ service-account*.json
 .DS_Store
 Thumbs.db
 
-# --- Python venv created by ./bootstrap.sh ---
+# --- Python venv (e.g. a project-local pre-commit install) ---
 .venv/
 
 # --- Dependency / build output (add your stack's — see github.com/github/gitignore) ---

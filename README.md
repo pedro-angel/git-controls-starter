@@ -1,285 +1,186 @@
 # git-controls-starter
 
-Project-agnostic git & GitHub discipline you can drop into **any** repo, in any language.
-It makes a *machine* enforce hygiene, secret-safety, commit discipline, and a hardened CI —
-so a broken invariant fails like a red build instead of slipping past a tired reviewer.
+A set of git and GitHub controls you point your repo at. A machine enforces hygiene,
+secret-safety, commit discipline and a hardened CI, so a broken invariant fails like a
+red build instead of slipping past a tired reviewer.
 
-Everything here is generic: no assumptions about your stack. Distilled from the controls
-in the [agent-methodology](https://github.com/pedro-angel/agent-methodology) pack, with the
-pack-specific validators stripped out.
+Language-agnostic — nothing here assumes your stack.
 
-## What's inside
+## How it reaches your repo
 
-```text
-.pre-commit-config.yaml      hygiene + conventional-commit + project invariants (one config, re-run in CI)
-.pre-commit-hooks.yaml       hook manifest, so other repos can consume the checks REMOTELY at a pinned rev
-examples/.pre-commit-config.yaml  ready-made config for remote consumers (curl it, done)
-.github/workflows/checks.yml hardened CI: re-runs the SAME config + SAST (shellcheck/Semgrep), deep secret scan, dependency-review
-.github/workflows/security-scan.yml  weekly deep secret + SAST re-scan (osv-scanner/Trivy drop-ins for when you add deps)
-.github/workflows/release.yml  on a v* tag: SBOM + keyless SLSA provenance, published as a GitHub Release
-.github/workflows/pre-commit-autoupdate.yml  weekly PR bumping the pinned hook revs (Dependabot can't watch pre-commit)
-.github/dependabot.yml       weekly grouped bumps for the SHA-pinned Actions
-.gitignore                   secret globs (structurally un-committable) + OS cruft
-.gitattributes               force LF so line endings don't corrupt across OSes
-.editorconfig                editors satisfy the hygiene hooks before you commit
-bootstrap.sh                 one-command setup: prek, or pre-commit, or a local .venv
-scripts/checks/
-  check-no-tracked-secrets.sh  fail if a secret-looking file is tracked (also an example invariant)
-  check-one-pin-per-action.sh  every Action SHA-pinned, one pin per action repo-wide
-  check-no-private-identifiers.sh  your hostname / private infra names can't enter the repo
-  check-pin-comments-match.sh  CI-stage: a pin's `# vX.Y.Z` comment must still match its SHA
-  check-commit-trailer.sh      require a provenance trailer, so each commit is a decision record
-  check-evidence-trailer.sh    opt-in: live-surface commits must carry an Evidence: trailer
-  check-diagrams-rendered.sh   post-docs-build: every mermaid fence produced a rendered node
-  vocabulary-conformance.sh    make targets match the shared cross-repo vocabulary
-  vocabulary.txt               the canonical target-name list, shipped with the checker
+pre-commit distributes **hooks**, not **files**. That single fact explains the whole
+install, so it is worth seeing before you run anything:
+
+```mermaid
+flowchart LR
+  subgraph S["git-controls-starter, at a pinned tag"]
+    H["8 checks<br/><i>.pre-commit-hooks.yaml</i>"]
+    F["7 support files<br/><i>workflows, .gitignore,<br/>.gitattributes, .editorconfig,<br/>dependabot.yml</i>"]
+  end
+  H -->|"pre-commit fetches them<br/>on every run"| A["<b>.pre-commit-config.yaml</b><br/>one line names the tag"]
+  F -->|"you copy them once"| B["<b>your repo root</b>"]
+  A --> U1["updates arrive as a<br/>Dependabot PR"]
+  B --> U2["no automatic updates —<br/>re-copy to refresh"]
 ```
 
-## Three ways in
+The checks are never vendored, so there is no copy to drift. The support files must be
+copied, because a pre-commit repo cannot ship a workflow or a `.gitignore`.
 
-### 1. Consume remotely — recommended
+## Install
 
-pre-commit's native distribution: your repo references this one at a **pinned tag** and
-vendors nothing, so there is no copy to drift. Grab the ready-made config and the
-support files (these live in your repo — they can't be "consumed"):
+Prerequisite: `pre-commit` on your PATH — `pipx install pre-commit` or
+`brew install pre-commit`.
 
-Prerequisite: `pre-commit` on your PATH (`pipx install pre-commit` or
-`brew install pre-commit`) — or grab `bootstrap.sh` from modes 2–3, which falls back
-gracefully. Fetch from a **tag**, never `main`, so a re-run next month gets the same
-files (resolve the newest tag directly with `git ls-remote`, below — it works whether or
-not the tag was also published as a GitHub Release):
+Everything is fetched from a **tag**, never `main`, so a re-run next month gets the same
+bytes. The first line resolves the newest tag for you.
 
 ```bash
 TAG=$(git ls-remote --tags --sort=-v:refname \
   https://github.com/pedro-angel/git-controls-starter 'v*' \
   | grep -v '\^{}' | head -1 | sed 's|.*refs/tags/||')
 BASE=https://raw.githubusercontent.com/pedro-angel/git-controls-starter/$TAG
+
 curl -fsSL "$BASE/examples/.pre-commit-config.yaml" -o .pre-commit-config.yaml
+
 for f in .gitignore .gitattributes .editorconfig .github/dependabot.yml \
          .github/workflows/checks.yml .github/workflows/security-scan.yml \
-         .github/workflows/release.yml .github/workflows/pre-commit-autoupdate.yml; do
+         .github/workflows/release.yml; do
   mkdir -p "$(dirname "$f")"
-  if [ -e "$f" ]; then   # never clobber a file you already have — fetch beside it, merge by hand
-    curl -fsSL "$BASE/$f" -o "$f.upstream" && echo "wrote $f.upstream — merge into your $f"
+  if [ -e "$f" ]; then   # never clobber a file you already have
+    curl -fsSL "$BASE/$f" -o "$f.upstream" && echo "wrote $f.upstream — merge by hand"
   else
     curl -fsSL "$BASE/$f" -o "$f"
   fi
 done
+
 pre-commit install --install-hooks && pre-commit run --all-files
 ```
 
-Append your own linters at the bottom of the config, add your package ecosystem to
-`dependabot.yml`, done. **Staying current is automatic:** the autoupdate workflow bumps
-the pinned `rev` in a weekly PR — every gate change arrives as a reviewable diff with
-provenance, never as silent drift.
+Then append your own linters at the bottom of the config, and add your package ecosystem
+to `dependabot.yml`.
 
-### 2. New repo from the template
+## When each check runs
 
-Self-contained (everything vendored, works offline, easy to fork-and-diverge). On
-GitHub: **Use this template → Create a new repository**, or:
+Checks are split across three moments so a fresh clone never waits on the network:
 
-```bash
-gh repo create my-project --template pedro-angel/git-controls-starter --private --clone
-cd my-project && ./bootstrap.sh
+```mermaid
+flowchart LR
+  C["git commit"] --> P["<b>pre-commit stage</b><br/>offline, ~1s"]
+  P --> M["<b>commit-msg stage</b><br/>prefix + trailer"]
+  M --> PR["push / open PR"]
+  PR --> CI["<b>checks.yml</b><br/>same config, re-run<br/>+ manual-stage checks<br/>+ SAST + secret scan"]
+  CI --> T["push a v* tag"]
+  T --> R["<b>release.yml</b><br/>SBOM + SLSA provenance"]
 ```
 
-### 3. Copy into an existing repo (vendored)
+`checks.yml` re-runs the identical `.pre-commit-config.yaml`, so "passes on my machine"
+and "passes in CI" cannot diverge. The network-dependent checks sit at the manual stage
+and are invoked explicitly in CI — a `rev` bump alone never runs them.
 
-```bash
-cp -R /path/to/git-controls-starter/. .        # into your repo root
-git checkout -- README.md LICENSE 2>/dev/null  # restore YOUR versions (the cp clobbered them)
-./bootstrap.sh
+## The checks
+
+Generated from [`.pre-commit-hooks.yaml`](.pre-commit-hooks.yaml) — the manifest is the
+source of truth.
+
+| id | stage | what it asserts |
+| --- | --- | --- |
+| `check-no-tracked-secrets` | pre-commit | no secret-looking file is tracked by git |
+| `check-one-pin-per-action` | pre-commit | every Action is SHA-pinned, one pin per action repo-wide |
+| `check-no-private-identifiers` | pre-commit | no private identifier (hostname, internal name) enters the repo |
+| `check-commit-trailer` | commit-msg | commit body carries a provenance trailer |
+| `check-evidence-trailer` | commit-msg | live-surface commits carry an `Evidence:` trailer |
+| `check-pin-comments-match` | manual | every pin's `#` comment still dereferences to its SHA |
+| `check-diagrams-rendered` | manual | every mermaid fence rendered in the built docs |
+| `vocabulary-conformance` | pre-commit | make targets conform to the shared cross-repo vocabulary |
+
+Three ship commented in the example config, because each fails closed on a repo that has
+nothing for it to read: `check-evidence-trailer` needs `EVIDENCE_PATH_REGEX`,
+`check-diagrams-rendered` needs a built docs tree, `vocabulary-conformance` needs a root
+`Makefile`. Uncomment the ones that apply to you.
+
+Every check is **fail-closed**: it exits non-zero when its target is missing, so a green
+run never means "ran against nothing". Where a check needs the network, it separates a
+real failure from an unreachable lookup — exit 1 is a violation, exit 2 means it could
+not check, and it never reports the second as the first.
+
+## What the support files buy you
+
+- **`.gitignore`** makes secret files physically un-committable. `check-no-tracked-secrets`
+  catches one that was committed *before* it was ignored.
+- **`checks.yml`** runs least-privilege (`permissions: contents: read`), with
+  `timeout-minutes` and `concurrency` cancel. Beyond re-running your config it adds SAST
+  (`shellcheck` on shell, `Semgrep` on workflow YAML), a full-history `gitleaks` scan
+  pinned by SHA-256 of the binary, and `dependency-review` on PRs.
+- **`security-scan.yml`** re-runs the deep secret and SAST scan weekly, so a newly
+  published rule catches an old commit. `osv-scanner`, `Trivy` and `CodeQL` ship
+  commented — on a dependency-free repo they would scan nothing and pass, which this repo
+  treats as a bug. Uncomment when you have dependencies or app code.
+- **`release.yml`** turns a `v*` tag into a GitHub Release carrying an SBOM and a keyless
+  SLSA provenance attestation. Consumers verify with
+  `gh attestation verify <file> --repo <owner>/<repo>`.
+- **`dependabot.yml`** watches your Actions *and* your pre-commit revs. See below.
+- **`.gitattributes` + `.editorconfig`** keep line endings LF everywhere.
+
+## Staying current
+
+Two pinned surfaces, one mechanism:
+
+```mermaid
+flowchart LR
+  U["a hook or Action<br/>publishes a new tag"] --> W["<b>Dependabot</b><br/>weekly · 7-day cooldown"]
+  W --> P["one grouped PR<br/><i>rev / SHA bump + changelog</i>"]
+  P --> V["<b>checks.yml</b> runs<br/>on the PR"]
+  V --> M["you review the diff<br/>and merge"]
 ```
 
-If your repo hadn't committed a `README.md`/`LICENSE` yet, delete the starter's copies
-instead of adopting them by accident.
+The 7-day cooldown means a freshly published — possibly compromised — version is not
+proposed on day one. Grouping means the weekly sweep lands as one reviewable PR instead
+of a pile that goes stale and conflicts.
 
-`bootstrap.sh` (modes 2–3) uses whatever's available, in order: **prek** (a single static
-binary, zero Python — `brew install prek`); an existing **pre-commit** on PATH; else a
-project-local gitignored **`.venv`**. It installs both hook stages and runs the file
-checks once. Re-run everything exactly as CI does with `pre-commit run --all-files`.
-
-## Staying current & switching modes
-
-| You are on | Updates arrive by |
-| --- | --- |
-| Remote (mode 1) | `rev` bumps arrive as the weekly autoupdate PR. New **hook ids** don't — adopt them by hand (below). |
-| Template / copy-in (modes 2–3) | Manually adopt from upstream (below), or migrate to remote (also below). |
-
-**Autoupdate bumps `rev`, never your hook list.** When a tag ships a new hook, add its
-`id` to your config yourself — the tag's commit log announces it. And if the hook is
-`stages: [manual]` (the network-dependent ones are), a rev bump alone will never execute
-it: also add an explicit CI step after your default-stage run, e.g.
-`pre-commit run check-pin-comments-match --hook-stage manual --all-files`.
-
-### Vendored repo: adopt template updates
-
-A repo created from the template shares **no git history** with it, so you can't merge —
-but you can fetch it as a remote and adopt selectively. Two kinds of files:
-**wholesale-safe** (upstream-owned; you rarely edit them) and **hand-merge** (you've
-customized them — never blind-overwrite):
-
-One warning first: the wholesale checkout overwrites same-named files. Invariants you
-wrote yourself are safe **if** they have their own names (`check-my-thing.sh`); if you
-edited an upstream script in place, treat it as hand-merge instead.
+**Dependabot bumps `rev`, never your hook list.** When a tag ships a *new* check, add its
+`id` to your config yourself. If that check is manual-stage, also add an explicit CI step
+after your default-stage run:
 
 ```bash
-git remote add controls https://github.com/pedro-angel/git-controls-starter 2>/dev/null || true
-git fetch controls --tags
-TAG=$(git tag --sort=-v:refname -l 'v*' | head -1)   # newest upstream tag — use it for BOTH steps
-
-# wholesale-safe: scripts + CI + automation + support files
-git checkout "$TAG" -- scripts/checks bootstrap.sh .pre-commit-hooks.yaml examples \
-  .github/workflows/checks.yml .github/workflows/security-scan.yml \
-  .github/workflows/release.yml .github/workflows/pre-commit-autoupdate.yml \
-  .github/dependabot.yml .gitattributes .editorconfig
-
-# hand-merge: review what upstream changed in the files you own, and port by hand
-git diff HEAD "$TAG" -- .pre-commit-config.yaml .gitignore
-
-pre-commit run --all-files                # prove the adopted gate is green
-git add -A && git commit                  # one reviewable adoption commit
+pre-commit run check-pin-comments-match --hook-stage manual --all-files
 ```
 
-### Migrate vendored → remote
+## Repo settings you must enable
 
-The durable fix for update pain. In `.pre-commit-config.yaml`, replace the
-`repo: local` invariant entries with the remote block (see
-[examples/.pre-commit-config.yaml](examples/.pre-commit-config.yaml)),
-then `git rm scripts/checks/<the vendored copies>` — **keep any invariants you wrote
-yourself** under `repo: local`. Everything else (CI, autoupdate, dependabot, hygiene
-files) stays as-is; the autoupdate workflow now also bumps the starter `rev`. Finish
-with `pre-commit run --all-files` — the hooks must fetch from the tag and come up green.
+Some controls live in settings, not files — no YAML can turn them on. Under
+*Settings → Code security*, in order, because each unlocks the next:
 
-### Migrate remote → vendored
-
-For air-gapped repos, or to fork the checks' behavior: copy the scripts from the tag
-you were pinned to and swap the remote block back to `repo: local` entries:
-
-```bash
-git remote add controls https://github.com/pedro-angel/git-controls-starter 2>/dev/null || true
-git fetch controls --tags && git checkout v1.0.0 -- scripts/checks
-# swap the remote block back to `repo: local` entries, then prove it:
-pre-commit run --all-files
-```
-
-Installing the [agent-methodology](https://github.com/pedro-angel/agent-methodology)
-pack too? The two don't overlap — this repo owns the git controls
-(`.pre-commit-config.yaml`, `scripts/checks/`, CI), the pack owns the prose
-(`AGENTS.md`, `skills/`, agent adapters). Any order works; see the pack's
-[INSTALL.md](https://github.com/pedro-angel/agent-methodology/blob/main/INSTALL.md).
-
-## What each control buys you
-
-- **Local == CI.** [checks.yml](.github/workflows/checks.yml) re-runs the same
-  `.pre-commit-config.yaml`, so "passes on my machine" and "passes in CI" can't diverge.
-- **Secrets can't leak.** `.gitignore` makes secret files physically un-committable,
-  `detect-private-key` blocks key material, and `check-no-tracked-secrets.sh` catches one
-  that slipped in *before* it was ignored.
-- **Scannable, accountable history.** A conventional-commit prefix (`feat/fix/…`) plus a
-  required provenance trailer make each commit a decision record. `git commit -s` satisfies
-  the trailer *and* the [DCO](https://developercertificate.org/) in one step. When a commit's
-  correctness rests on a run — a live integration suite, a deploy, a benchmark — add an
-  `Evidence:` trailer pointing at the captured artifact (a results file, a log, a CI-run URL),
-  so the proof travels with the commit instead of living in a reviewer's memory. That turns
-  "trust me, it's tested" into a link the next reader can open.
-- **Hardened CI.** Least-privilege `permissions: contents: read`, Actions pinned to full
-  commit SHAs (a moved tag can't change what runs), `timeout-minutes`, `concurrency` cancel,
-  and Dependabot to keep the pins fresh — **grouped**, so the weekly sweep lands as one
-  reviewable PR instead of a pile that goes stale and conflicting, and with a **7-day cooldown**
-  so a freshly published (possibly compromised) version isn't proposed on day one. A weekly
-  [`pre-commit-autoupdate.yml`](.github/workflows/pre-commit-autoupdate.yml) does the same
-  for the pinned hook revs — the one dependency surface Dependabot cannot watch. And
-  `check-one-pin-per-action.sh` fails the build if an action is un-pinned or pinned to two
-  different SHAs across workflows, so piecemeal bumps can't drift — while the CI-stage
-  `check-pin-comments-match.sh` verifies each pin's `# vX.Y.Z` comment still dereferences
-  to its SHA (an update bot once bumped a pin while the comment kept lying). It separates a
-  wrong comment from an unverifiable one — exit 1 means a comment really is stale, exit 2 means
-  a lookup could not reach the remote — so a flaky network can never be reported as a bad pin.
-  Bot commits are skipped in the commit-msg gate so these automated PRs aren't blocked by the
-  trailer rule.
-- **Vulnerabilities fail the build, at three gates.** Every PR runs SAST (`shellcheck` on the
-  shell scripts, `Semgrep` on the workflow YAML — Action script-injection, unpinned refs,
-  over-broad permissions), a full-history `gitleaks` secret scan, and `dependency-review` (a PR
-  that *adds* a vulnerable dependency — a GitHub Action counts — is blocked). A weekly
-  [`security-scan.yml`](.github/workflows/security-scan.yml) re-runs the deep secret + SAST scan
-  so a newly-published rule catches an old commit. And a `v*` tag
-  ([`release.yml`](.github/workflows/release.yml)) generates an SBOM and a keyless SLSA
-  build-provenance attestation, published as a GitHub Release — so a consumer can
-  `gh attestation verify` the exact bytes they pin. The scanners that would scan *nothing* on
-  this dependency-free repo (`osv-scanner`, `Trivy`, `CodeQL`) ship as commented drop-ins, not
-  green-against-nothing theater — they activate the moment you add real dependencies or app code.
-- **Identity stays out of the repo.** `check-no-private-identifiers.sh` blocks commits
-  that would add your machine's own hostname (derived at runtime — zero config) (generic names like `mac` or `laptop` are skipped — they identify nothing) or any
-  name from a per-user registry at `~/.config/git-controls/private-identifiers` (one
-  identifier per line: other hosts, internal domains). The registry lives *outside* the
-  repo because the list itself is the secret. A hostname is identity, not evidence —
-  record a machine's properties or a role name instead. For the rare file where a name
-  legitimately belongs, add `<identifier> <path-glob>` to a tracked
-  `.private-identifiers-allow` — explicit and reviewable, so the guard fails toward
-  asking rather than silently.
-- **Sibling repos share one dev vocabulary.** `vocabulary-conformance.sh` checks that a
-  repo's `make` targets come from the shared cross-repo name list — `setup`, `test`,
-  `check`, `dod`, the `stack-*` and `test-*` families — rather than whatever each repo's
-  backend happened to call things. It verifies the names exist as real targets (a `.PHONY`
-  ghost whose rule was deleted doesn't count), that no banned or shadowed name is used, that
-  family names appear exactly when their capability marker fires, and that `check` actually
-  expands to run the floor it claims. Opt in per repo; it fails closed with no root
-  `Makefile`. The manifest ships **with the checker**, not copied into each consumer —
-  a shared standard stops being shared the moment every repo owns a fork of the list.
-- **Cross-OS safe.** `.gitattributes` + `.editorconfig` keep line endings LF everywhere.
-
-## Make it yours
-
-- **Add your own invariants.** The real value is checks no linter can write:
-  `check-no-tracked-secrets.sh` is a worked template — copy it and assert a contract
-  specific to your repo ("every `src/` route has a test", "the config example matches the
-  schema", "no `console.log` in `src/`"). Register it under `repo: local` in the config.
-  Keep them **fail-closed**: exit non-zero when the target is missing, so a green check
-  never means "ran against nothing."
-- **Make claims carry proof.** Enable the opt-in `check-evidence-trailer.sh`: pick the
-  paths whose correctness rests on a live run (integration clients, deploy config), and
-  commits touching them must carry an `Evidence:` trailer. The failure it prevents is
-  real: a commit claiming "complete API coverage" once shipped nine integration tests
-  that had never run green against a live server — nothing required proof to travel
-  with the claim.
-- **Preflight your entry points.** A setup script that assumes its prerequisites fails
-  late and cryptically (a venv built on the wrong interpreter dies minutes later, deep
-  in dependency resolution). Make `make setup` / `bootstrap.sh`-style entry points
-  validate prerequisites **against the authoritative source** (e.g. read the version
-  floor from `pyproject.toml` / `package.json`, don't restate it) and fail in the first
-  second with the remedy: `needs Python >=3.14, found 3.13 — run: make setup PYTHON=python3.14`.
-- **Team workflow?** Uncomment `no-commit-to-branch` in the config, and on GitHub enable
-  branch protection on `main` with `checks` as a **required status check**.
-- **Security scanning is already wired in** — all at the manual/CI stage, never on a
-  fresh-clone commit (see the three-gate summary above): `shellcheck` + `Semgrep` for SAST,
-  `gitleaks` for deep secret scanning, `dependency-review` on PRs, and SBOM + provenance on
-  release. Still-optional add-ons: `markdownlint-cli2` for docs, and `actionlint`/`zizmor` for
-  dedicated GitHub-Actions workflow linting. `osv-scanner`, `Trivy`, and `CodeQL` ship as
-  commented drop-ins — uncomment them once you have dependencies or compiled/interpreted app
-  code for them to analyze (otherwise they scan nothing and pass, which this repo treats as a bug).
-
-## One-time GitHub setup when you publish
-
-This starter ships an MIT `LICENSE` — **update the copyright holder to your own**, or swap in
-a different license (no license = all-rights-reserved). Also add a `SECURITY.md` + private
-vulnerability reporting and a `CONTRIBUTING.md` documenting the commit gate.
-
-Some controls live in **repo settings, not files** — no YAML can turn them on. Enable them once,
-in order (each unlocks the next), under *Settings → Code security*:
-
-1. **Dependency graph** — `dependency-review` fails closed without it. Usually on for public repos but **verify/enable** it here (private repos also need GitHub Advanced Security). Everything below needs it.
+1. **Dependency graph** — `dependency-review` fails closed without it. Everything below needs it.
 2. **Dependabot alerts** — notifies you when a dependency has a known advisory.
-3. **Dependabot security updates** — auto-opens a PR to patch an alerting dependency. This is *distinct* from
-   [`dependabot.yml`](.github/dependabot.yml): security updates are alert-driven (patch a CVE now), whereas the
-   committed `dependabot.yml` drives *scheduled* version bumps. Run either, both, or neither.
-4. **Code scanning** — turns on the *Security → Code scanning* tab that receives SARIF (free on public repos;
-   requires GitHub Advanced Security on private ones). The commented `osv-scanner`/`Trivy` drop-ins in
-   [`security-scan.yml`](.github/workflows/security-scan.yml) upload there once you enable it and grant the job
-   `security-events: write`.
-5. *(optional)* **Secret scanning + push protection** — a server-side complement to the `gitleaks` gate.
+3. **Dependabot security updates** — alert-driven patch PRs. Distinct from the committed
+   `dependabot.yml`, which drives *scheduled* version bumps. Run either, both, or neither.
+4. **Code scanning** — enables the SARIF tab the commented `osv-scanner`/`Trivy` drop-ins
+   upload to. Grant that job `security-events: write` when you uncomment them.
+5. *(optional)* **Secret scanning + push protection** — a server-side complement to `gitleaks`.
 
-Then **tag releases with semver** so consumers can pin a version. A `v*` tag runs
-[`release.yml`](.github/workflows/release.yml), which publishes a **GitHub Release** (so a repo using this
-workflow *does* get `gh release list` entries) carrying the SBOM, and records a keyless SLSA provenance
-attestation. Consumers verify a downloaded asset with `gh attestation verify <file> --repo <owner>/<repo>`.
+Publishing your own repo? Update the MIT `LICENSE` copyright holder, add a `SECURITY.md`
+with private vulnerability reporting, and tag releases with semver so *your* consumers can
+pin a version.
+
+## Extend it
+
+- **Add your own invariants.** The value is in checks no off-the-shelf linter can write.
+  [`check-no-tracked-secrets.sh`](scripts/checks/check-no-tracked-secrets.sh) is a worked
+  template: glob your files, assert a property, exit non-zero. Register it under
+  `repo: local`. Keep it fail-closed.
+- **Make claims carry proof.** Turn on `check-evidence-trailer` for the paths whose
+  correctness rests on a live run — integration clients, deploy config. Commits touching
+  them must then cite the artifact that proves the claim.
+- **Team workflow.** Uncomment `no-commit-to-branch`, and enable branch protection on
+  `main` with `checks` as a required status check.
+
+## Working on this repo
+
+```bash
+pre-commit install --install-hooks   # both stages
+pre-commit run --all-files           # exactly what CI runs
+```
+
+Related: the [agent-methodology](https://github.com/pedro-angel/agent-methodology) pack.
+The two do not overlap — this repo owns the git controls, the pack owns the prose
+(`AGENTS.md`, `skills/`, agent adapters). Any order works.

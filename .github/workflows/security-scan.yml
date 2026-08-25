@@ -9,7 +9,7 @@ name: security-scan
 
 on:
   schedule:
-    - cron: "0 7 * * 1" # Mondays 07:00 UTC (just after the 06:00 pre-commit-autoupdate PR)
+    - cron: "0 7 * * 1" # Mondays 07:00 UTC — a weekly re-scan, offset from Dependabot's PRs
   workflow_dispatch:
 
 # Least privilege: both active jobs only read the repo. The commented consumer drop-ins that

@@ -10,7 +10,7 @@ on:
     tags: ["v[0-9]*"] # glob (not regex): require a leading digit so `vfoo` can't trigger a release
 
 # Deny all by default; the single job below grants exactly the three scopes it needs and no more,
-# so any job added later without its own block inherits nothing (matches pre-commit-autoupdate.yml).
+# so any job added later without its own block inherits nothing.
 permissions: {}
 
 # Never cancel a half-published release out from under itself.

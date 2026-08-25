@@ -3,9 +3,8 @@
 # and each action must resolve to exactly ONE SHA across all workflows.
 #
 # Why both: a moved tag can't change what runs (SHA pin), and piecemeal bumping can't
-# drift — in a real repo we found checkout@v4 and @v6, upload-artifact@v4 and @v7
-# coexisting across workflows, which is how "which version runs?" stops having one
-# answer and stale Dependabot PRs start conflicting.
+# drift. Two SHAs for one action means "which version runs?" has no single answer, and
+# the bump PRs for it start conflicting with each other.
 #
 # Ignores local actions (./path) and docker:// refs. Fail-closed: no workflow files
 # found is a FAIL, so a green run never means "ran against nothing".
